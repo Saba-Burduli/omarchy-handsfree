@@ -242,6 +242,19 @@ say = ["calibrate", "calibrate eyes", "calibrate eye tracking"]
 internal = "calibrate"
 
 [[command]]
+say = ["grid", "show grid", "mouse grid"]
+internal = "grid"
+
+# While the grid is open, a number zooms into that cell and moves the pointer.
+[[command]]
+say = ["{n}", "number {n}", "pick {n}"]
+internal = "grid_pick"
+
+[[command]]
+say = ["close grid", "hide grid", "cancel"]
+internal = "grid_close"
+
+[[command]]
 say = ["start dictation", "dictation on", "dictation mode"]
 internal = "dictation_on"
 

@@ -15,6 +15,7 @@ from .consent import Consent
 from .desktop import Desktop
 from .gaze.calibrate import CalibrationError, CalibrationStore, run_calibration
 from .gaze.engine import GazeEngine
+from .gaze.grid import Rect, around, center, split
 from .intents.actions import Executor
 from .intents.apps import LazyAppIndex
 from .intents.parser import Parser
@@ -50,7 +51,10 @@ class Daemon:
         )
         self.executor = Executor(desktop, self.internal)
         self.voice = self._make_voice_worker(voice)
-        self.gaze = GazeEngine(config.section("gaze"), desktop, on_error=self._gaze_failed)
+        self.gaze = GazeEngine(config.section("gaze"), desktop, on_error=self._gaze_failed, on_click=self._gaze_click)
+        self._grid_rect: Rect | None = None
+        self._grid_monitor = None
+        self._grid_overlay = None
         self.calibrations = CalibrationStore()
         self._calibrating = threading.Lock()
         self._sleep = time.sleep
@@ -81,6 +85,7 @@ class Daemon:
     def _shutdown(self) -> None:
         self.voice.shutdown()
         self.gaze.stop()
+        self.close_grid()
         self._server.close()
         state_file().unlink(missing_ok=True)
         self._signal_waybar()
@@ -155,6 +160,9 @@ class Daemon:
     def _cmd_calibrate(self, _arg: Any) -> str:
         return self.calibrate()
 
+    def _cmd_grid(self, _arg: Any) -> str:
+        return self.close_grid() if self._grid_rect is not None else self.show_grid()
+
     def _cmd_dictation(self, mode: Any) -> str:
         return self.set_dictation(self._toggle(mode, self.state["dictation"]))
 
@@ -205,6 +213,8 @@ class Daemon:
             log.exception("command failed: %s", text)
             self._notify(f"Failed: “{text}”", str(exc))
             return f"failed: {exc}"
+        if "mouse" in intent.command and self._grid_rect is not None:
+            self.close_grid()  # after the click, so the pointer stayed on the cell
         log.info("-> %s", result)
         self._notify(f"“{text}”", result)
         return result
@@ -254,6 +264,77 @@ class Daemon:
     def _gaze_failed(self, exc: Exception) -> None:
         self._set(gaze=False)
         self._notify("Eye tracking stopped", str(exc))
+
+    def _gaze_click(self) -> None:
+        if self.state["calibrating"]:
+            return
+        try:
+            self.desktop.mouse("click")
+        except Exception as exc:
+            log.exception("gaze click failed")
+            self._notify("Click failed", str(exc))
+            return
+        if self._grid_rect is not None:
+            self.close_grid()
+
+    # -- mouse grid ------------------------------------------------------------
+
+    def _grid_size(self) -> int:
+        return max(2, int(self.config.section("gaze").get("grid_size", 3)))
+
+    def show_grid(self) -> str:
+        settings = self.config.section("gaze")
+        monitor = self.desktop.focused_monitor()
+        if self.gaze.running and self.gaze.point is not None:
+            rect = around(self.gaze.point, float(settings.get("grid_span_px", 420)), monitor.rect)
+        else:
+            rect = monitor.rect
+        with self._lock:
+            if self._grid_overlay is None or self._grid_monitor != monitor:
+                if self._grid_overlay is not None:
+                    self._grid_overlay.close()
+                self._grid_overlay = self.desktop.overlay(monitor)
+            self._grid_monitor = monitor
+            self._grid_rect = rect
+            self.gaze.paused = True
+            self._draw_grid()
+        self._set(grid=True)
+        return "grid shown"
+
+    def _draw_grid(self) -> None:
+        m = self._grid_monitor
+        cells = [(x - m.x, y - m.y, w, h) for x, y, w, h in split(self._grid_rect, self._grid_size())]
+        self._grid_overlay.grid(cells)
+
+    def pick_grid(self, number: int) -> str:
+        with self._lock:
+            if self._grid_rect is None:
+                return "no grid open; say \u201cgrid\u201d first"
+            cells = split(self._grid_rect, self._grid_size())
+            if not 1 <= number <= len(cells):
+                raise ValueError(f"pick a number from 1 to {len(cells)}")
+            cell = cells[number - 1]
+            self.desktop.move_cursor(*center(cell))
+            # Keep zooming while the next level's cells would still be big enough.
+            min_px = float(self.config.section("gaze").get("grid_min_px", 24))
+            if min(cell[2], cell[3]) / self._grid_size() >= min_px:
+                self._grid_rect = cell
+                self._draw_grid()
+                return f"zoomed into {number}"
+        return f"pointer on {number}; say \u201cclick\u201d"
+
+    def close_grid(self) -> str:
+        with self._lock:
+            overlay, self._grid_overlay = self._grid_overlay, None
+            self._grid_rect = None
+            self._grid_monitor = None
+            if not self.state["calibrating"]:
+                self.gaze.paused = False
+        if overlay is not None:
+            overlay.close()
+        if self.state["grid"]:
+            self._set(grid=False)
+        return "grid closed"
 
     def calibrate(self) -> str:
         self._require("camera")
@@ -325,6 +406,15 @@ class Daemon:
 
     def _internal_calibrate(self, _slots: dict[str, Any]) -> str:
         return self.calibrate()
+
+    def _internal_grid(self, _slots: dict[str, Any]) -> str:
+        return self.show_grid()
+
+    def _internal_grid_pick(self, slots: dict[str, Any]) -> str:
+        return self.pick_grid(int(slots["n"]))
+
+    def _internal_grid_close(self, _slots: dict[str, Any]) -> str:
+        return self.close_grid()
 
     def _internal_dictation_on(self, _slots: dict[str, Any]) -> str:
         return self.set_dictation(True)

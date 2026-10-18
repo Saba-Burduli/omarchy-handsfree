@@ -70,6 +70,32 @@ class DaemonTest(unittest.TestCase):
         ])
         self.assertFalse(self.daemon.state["dictation"])
 
+    def test_grid_zooms_then_click_closes_it(self):
+        self.say("show grid")
+        self.assertTrue(self.daemon.state["grid"])
+        overlay = self.desktop.last_overlay
+        self.assertEqual(overlay.messages[-1]["cells"][0], [0, 0, 640, 360])
+        self.say("five")  # centre cell of the whole 1920x1080 screen
+        self.assertEqual(self.actions()[-1], ("move_cursor", (960.0, 540.0)))
+        self.assertEqual(overlay.messages[-1]["cells"][0], [640, 360, 640 / 3, 120])
+        self.say("click")
+        self.assertEqual(self.actions()[-1], ("mouse", ("click",)))
+        self.assertTrue(overlay.closed)
+        self.assertFalse(self.daemon.state["grid"])
+
+    def test_grid_stops_zooming_when_cells_get_small(self):
+        self.daemon.config.settings["gaze"]["grid_min_px"] = 100
+        self.say("grid")
+        self.assertIn("zoomed", self.say("one")["message"])
+        self.assertIn("pointer on", self.say("one")["message"])
+
+    def test_number_without_grid(self):
+        self.assertIn("no grid", self.say("three")["message"])
+
+    def test_grid_number_out_of_range(self):
+        self.say("grid")
+        self.assertIn("failed", self.say("twelve")["message"])
+
     def test_bad_toggle(self):
         self.assertFalse(self.daemon.handle_request({"cmd": "dictation", "arg": "maybe"})["ok"])
 

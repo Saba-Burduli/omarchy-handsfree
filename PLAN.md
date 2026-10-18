@@ -15,7 +15,7 @@ fix failures, commit.
 - [x] 3. Dictation mode, key combos (uinput), mouse clicks/scroll (uinput), typing (wtype)
 - [x] 4. Gaze pointer: MediaPipe features, ridge-regression mapper, One Euro filter,
        calibration with GTK layer-shell overlay, per-monitor calibration store
-- [ ] 5. Gaze clicking: dwell click, long-blink click, numbered mouse grid that zooms
+- [x] 5. Gaze clicking: dwell click, long-blink click, numbered mouse grid that zooms
 - [ ] 6. Polish: wake word (openWakeWord), Waybar module, first-run consent (`handsfree-ctl setup`),
        Hyprland bindings, systemd unit, udev rule, `install.sh`, README
 - [ ] 7. Review pass: missing tests, bugs, cleanups; repeat until nothing useful is left

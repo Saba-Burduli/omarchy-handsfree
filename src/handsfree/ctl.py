@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     gaze = sub.add_parser("gaze", help="eye tracking moves the pointer")
     gaze.add_argument("mode", choices=["on", "off", "toggle"])
     sub.add_parser("calibrate", help="calibrate eye tracking for the focused monitor")
+    sub.add_parser("grid", help="show or hide the numbered mouse grid")
     dictation = sub.add_parser("dictation", help="type everything you say")
     dictation.add_argument("mode", choices=["on", "off", "toggle"])
     say = sub.add_parser("say", help="run a command as if it was spoken")

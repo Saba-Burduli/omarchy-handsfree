@@ -179,6 +179,23 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(self.desktop.calls, [])
         self.assertIsNotNone(self.engine.point)
 
+    def test_dwell_clicks(self):
+        clicks = []
+        engine = GazeEngine({"dwell_ms": 500}, self.desktop, on_error=lambda e: None, on_click=lambda: clicks.append(1))
+        engine.set_mapping(self.mapper, MONITOR)
+        for i in range(30):
+            engine.step(Observation(i / 30, fake_features(800, 300), 0.0))
+        self.assertEqual(clicks, [1])
+
+    def test_long_blink_clicks(self):
+        clicks = []
+        engine = GazeEngine({"blink_click_ms": 600}, self.desktop, on_error=lambda e: None, on_click=lambda: clicks.append(1))
+        engine.set_mapping(self.mapper, MONITOR)
+        for i in range(60):
+            blink = 0.9 if 10 <= i < 35 else 0.0  # ~830 ms closed
+            engine.step(Observation(i / 30, fake_features(800, 300), blink))
+        self.assertEqual(clicks, [1])
+
     def test_clamps_to_monitor(self):
         self.engine.set_mapping(self.mapper, MONITOR)
         self.engine.step(Observation(0.0, fake_features(5000, -900), 0.0))

@@ -41,6 +41,16 @@ calibration_points = 9   # 9 (3x3) or 16 (4x4, more accurate, takes longer)
 # One Euro smoothing: lower min_cutoff = steadier pointer, higher beta = snappier.
 min_cutoff = 0.4
 beta = 0.001
+# Click by holding your gaze still for this long; 0 = off (try 900).
+dwell_ms = 0
+dwell_radius_px = 50
+# Click with a deliberate blink of at least this long; 0 = off (try 600).
+blink_click_ms = 0
+# Mouse grid: n x n cells, first shown this big around your gaze (or the whole
+# screen without gaze); zooming stops once cells would be smaller than grid_min_px.
+grid_size = 3
+grid_span_px = 420
+grid_min_px = 24
 # The overlay runs under the system Python with gtk4-layer-shell preloaded.
 overlay_python = "/usr/bin/python3"
 layer_shell_lib = "/usr/lib/libgtk4-layer-shell.so"

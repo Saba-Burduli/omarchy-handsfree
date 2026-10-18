@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from ..config import data_dir
 from ..desktop import Desktop, Monitor
+from .clicks import DwellDetector, LongBlinkDetector
 from .features import Observation
 from .filter import PointFilter
 from .mapper import GazeMapper
@@ -32,10 +33,14 @@ class GazeEngine:
         settings: dict[str, Any],
         desktop: Desktop,
         on_error: Callable[[Exception], None],
+        on_click: Callable[[], None] | None = None,
     ):
         self.settings = settings
         self.desktop = desktop
         self.on_error = on_error
+        self.on_click = on_click or (lambda: None)
+        self.dwell = DwellDetector(float(settings.get("dwell_ms", 0)), float(settings.get("dwell_radius_px", 50)))
+        self.blink = LongBlinkDetector(float(settings.get("blink_click_ms", 0)))
         self.mapper: GazeMapper | None = None
         self.monitor: Monitor | None = None
         self.paused = False     # keep tracking but leave the pointer alone
@@ -106,6 +111,9 @@ class GazeEngine:
             mapper, monitor = self.mapper, self.monitor
         for sink in sinks:
             sink(obs)
+        if self.blink.update(obs.blink, obs.t):
+            self.on_click()
+            return
         if obs.blink >= EYES_CLOSED or mapper is None or monitor is None:
             return
         x, y = mapper.predict(obs.features)
@@ -114,7 +122,10 @@ class GazeEngine:
         x, y = self.filter(x, y, obs.t)
         self.point = (x, y)
         if self.paused:
+            self.dwell.reset()
             return
         if self._sent is None or math.dist(self._sent, (x, y)) >= 2:
             self.desktop.move_cursor(x, y)
             self._sent = (x, y)
+        if self.dwell.update(x, y, obs.t):
+            self.on_click()
