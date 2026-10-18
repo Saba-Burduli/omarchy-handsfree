@@ -28,6 +28,7 @@ silence_ms = 700         # pause that ends a command
 max_utterance_ms = 12000
 start_timeout_ms = 5000  # push-to-talk gives up after this much silence
 fuzzy_threshold = 82     # 0-100; how loosely phrases may match
+preload = true           # load Whisper at startup (if the mic is allowed) so the first command is fast
 # Continuous mode only: wait for this openWakeWord model before each command
 # ("hey_jarvis", "alexa", "hey_mycroft"; install with ./install.sh --with-wake).
 # Empty = every sentence you say is treated as a command.

@@ -17,7 +17,7 @@ class VoiceWorker:
     def __init__(
         self,
         settings: dict[str, Any],
-        on_text: Callable[[str], None],
+        on_text: Callable[[str, bool], None],  # (text, came from push-to-talk)
         on_listening: Callable[[bool], None],
         on_error: Callable[[Exception], None],
     ):
@@ -93,7 +93,7 @@ class VoiceWorker:
                     self.on_error(exc)
                     break
                 if text:
-                    self.on_text(text)
+                    self.on_text(text, once)
 
     def _endpoint_config(self, expect_speech: bool) -> EndpointConfig:
         s = self.settings

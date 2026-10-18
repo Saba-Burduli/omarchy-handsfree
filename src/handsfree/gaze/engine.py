@@ -45,6 +45,7 @@ class GazeEngine:
         self.monitor: Monitor | None = None
         self.paused = False     # keep tracking but leave the pointer alone
         self.point: tuple[float, float] | None = None
+        self.error = ""  # why the camera loop last stopped, if it failed
         self.filter = PointFilter(float(settings.get("min_cutoff", 0.4)), float(settings.get("beta", 0.001)))
         self._sinks: list[Sink] = []
         self._sent: tuple[float, float] | None = None
@@ -60,6 +61,7 @@ class GazeEngine:
         if self.running:
             return
         self._stop.clear()
+        self.error = ""
         self._thread = threading.Thread(target=self._run, name="gaze", daemon=True)
         self._thread.start()
 
@@ -99,6 +101,7 @@ class GazeEngine:
                         self.step(obs)
         except Exception as exc:
             log.exception("gaze tracking failed")
+            self.error = str(exc) or type(exc).__name__
             self._stop.set()
             self.on_error(exc)
         finally:

@@ -66,7 +66,7 @@ class Daemon:
 
         return VoiceWorker(
             settings,
-            on_text=self.handle_text,
+            on_text=lambda text, push_to_talk: self.handle_text(text, quiet=not push_to_talk),
             on_listening=lambda on: self._set(listening=on),
             on_error=self._voice_failed,
         )
@@ -76,6 +76,8 @@ class Daemon:
     def run(self) -> None:
         self._server.start()
         self._publish()
+        if self._consent().microphone and self.config.section("voice").get("preload", True):
+            self.voice.transcriber.preload()  # first command shouldn't wait for model load
         log.info("handsfree ready on %s", socket_path())
         self._stopping.wait()
         self._shutdown()
@@ -99,13 +101,14 @@ class Daemon:
         self._publish()
 
     def _publish(self) -> None:
-        with self._lock:
-            snapshot = dict(self.state)
         path = state_file()
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(snapshot))
-        os.replace(tmp, path)
+        # Voice, gaze and socket threads all publish; one writer at a time
+        # keeps them from racing on the temp file.
+        with self._lock:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.state))
+            os.replace(tmp, path)
         self._signal_waybar()
 
     def _signal_waybar(self) -> None:
@@ -196,7 +199,9 @@ class Daemon:
         self._set(voice="off", listening=False)
         self._notify("Voice control stopped", str(exc))
 
-    def handle_text(self, text: str) -> str:
+    def handle_text(self, text: str, quiet: bool = False) -> str:
+        """Run what was said. `quiet` skips "not understood" notifications,
+        for continuous listening where most speech isn't meant for us."""
         text = text.strip()
         if not text:
             return "nothing heard"
@@ -206,18 +211,19 @@ class Daemon:
         if self.state["dictation"] and not (intent and intent.exact and intent.command.get("dictation")):
             return self._dictate(text)
         if intent is None:
-            self._notify("Not understood", f"“{text}”")
+            if not quiet:
+                self._notify("Not understood", f"\u201c{text}\u201d")
             return f"not understood: {text}"
         try:
             result = self.executor.execute(intent)
         except Exception as exc:
             log.exception("command failed: %s", text)
-            self._notify(f"Failed: “{text}”", str(exc))
+            self._notify(f"Failed: \u201c{text}\u201d", str(exc))
             return f"failed: {exc}"
         if "mouse" in intent.command and self._grid_rect is not None:
             self.close_grid()  # after the click, so the pointer stayed on the cell
         log.info("-> %s", result)
-        self._notify(f"“{text}”", result)
+        self._notify(f"\u201c{text}\u201d", result)
         return result
 
     def _dictate(self, text: str) -> str:
@@ -352,8 +358,12 @@ class Daemon:
 
         self.gaze.add_sink(sink)
         try:
-            if not seen.wait(timeout):
-                raise CalibrationError("No face seen by the camera; sit in front of it and try again")
+            deadline = time.monotonic() + timeout
+            while not seen.wait(0.2):
+                if not self.gaze.running:
+                    raise CalibrationError(self.gaze.error or "the camera stopped")
+                if time.monotonic() > deadline:
+                    raise CalibrationError("No face seen by the camera; sit in front of it and try again")
         finally:
             self.gaze.remove_sink(sink)
 
@@ -383,7 +393,8 @@ class Daemon:
         finally:
             if overlay is not None:
                 overlay.close()
-            self.gaze.paused = False
+            with self._lock:
+                self.gaze.paused = self._grid_rect is not None
             self._calibrating.release()
             self._set(calibrating=False)
 

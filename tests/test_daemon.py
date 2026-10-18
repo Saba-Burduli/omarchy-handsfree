@@ -1,9 +1,12 @@
 import os
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
 from handsfree.config import Config
+from handsfree.consent import Consent
 from handsfree.daemon import Daemon
 from handsfree.desktop import DryRunDesktop
 
@@ -95,6 +98,48 @@ class DaemonTest(unittest.TestCase):
     def test_grid_number_out_of_range(self):
         self.say("grid")
         self.assertIn("failed", self.say("twelve")["message"])
+
+    def test_concurrent_state_updates(self):
+        errors = []
+
+        def hammer(n):
+            try:
+                for i in range(200):
+                    self.daemon._set(last=f"{n}-{i}")
+            except Exception as exc:  # pragma: no cover - the bug being guarded
+                errors.append(exc)
+
+        threads = [threading.Thread(target=hammer, args=(n,)) for n in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+
+    def test_continuous_mode_does_not_nag_about_overheard_speech(self):
+        self.daemon.handle_text("so anyway I told him", quiet=True)
+        self.assertEqual(self.desktop.calls, [])
+        self.daemon.handle_text("so anyway I told him")
+        self.assertEqual(self.desktop.calls[-1][1][0], "Not understood")
+
+    def test_calibration_fails_fast_without_camera_and_keeps_grid_paused(self):
+        Consent(camera=True).save()
+        self.say("grid")
+        start = time.monotonic()
+        self.daemon._calibrating.acquire()
+        self.daemon._calibrate()  # no cv2/mediapipe here: the camera thread fails
+        self.assertLess(time.monotonic() - start, 5)
+        self.assertEqual(self.desktop.calls[-1][1][0], "Calibration failed")
+        self.assertFalse(self.daemon.state["calibrating"])
+        self.assertFalse(self.daemon.state["gaze"])
+        self.assertTrue(self.daemon.gaze.paused)  # grid is still open
+        self.say("close grid")
+        self.assertFalse(self.daemon.gaze.paused)
+
+    def test_gaze_requires_camera_consent(self):
+        response = self.daemon.handle_request({"cmd": "gaze", "arg": "on"})
+        self.assertFalse(response["ok"])
+        self.assertIn("camera", response["error"])
 
     def test_bad_toggle(self):
         self.assertFalse(self.daemon.handle_request({"cmd": "dictation", "arg": "maybe"})["ok"])

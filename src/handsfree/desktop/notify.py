@@ -1,4 +1,4 @@
-"""Desktop notifications via notify-send (shown by mako on Omarchy)."""
+"""Desktop notifications via notify-send (shown by Omarchy's notification daemon)."""
 
 from __future__ import annotations
 
