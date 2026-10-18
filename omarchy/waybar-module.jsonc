@@ -1,0 +1,10 @@
+// Add "custom/handsfree" to a modules-* list in ~/.config/waybar/config.jsonc
+// and paste this block next to the other module settings.
+"custom/handsfree": {
+  "exec": "@BIN@/handsfree-ctl waybar",
+  "return-type": "json",
+  "interval": 5,
+  "signal": 9,
+  "on-click": "@BIN@/handsfree-ctl listen",
+  "on-click-right": "@BIN@/handsfree-ctl gaze toggle"
+}

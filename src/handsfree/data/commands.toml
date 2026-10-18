@@ -40,14 +40,13 @@ say = ["open browser", "open the browser", "launch browser", "new browser window
 run = "omarchy-launch-browser"
 
 # Whisper sometimes hears "Claude" as "cloud"; both are accepted.
-# Uses Omarchy's terminal launcher; change it if you use a different one.
 [[command]]
 say = ["open claude code", "launch claude code", "start claude code", "open cloud code"]
-run = "uwsm app -- xdg-terminal-exec claude"
+run = "omarchy-launch-terminal claude"
 
 [[command]]
 say = ["open terminal", "open a terminal", "new terminal"]
-run = "uwsm app -- xdg-terminal-exec"
+run = "omarchy-launch-terminal"
 
 [[command]]
 say = ["open {site}", "go to {site}", "show me {site}"]

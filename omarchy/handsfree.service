@@ -1,0 +1,13 @@
+[Unit]
+Description=Hands-free voice and eye control for Omarchy
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@BIN@/handsfree
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

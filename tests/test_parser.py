@@ -34,8 +34,8 @@ class ParserTest(unittest.TestCase):
         self.assertEqual((kind, slots["site"]), ("url", "https://www.google.com"))
 
     def test_literal_phrase_beats_site_slot(self):
-        self.assertEqual(self.action("Open Claude Code.")[1], "uwsm app -- xdg-terminal-exec claude")
-        self.assertEqual(self.action("open cloud code")[1], "uwsm app -- xdg-terminal-exec claude")
+        self.assertEqual(self.action("Open Claude Code.")[1], "omarchy-launch-terminal claude")
+        self.assertEqual(self.action("open cloud code")[1], "omarchy-launch-terminal claude")
         self.assertEqual(self.action("open claude")[2]["site"], "https://claude.ai")
 
     def test_multi_word_site(self):

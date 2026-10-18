@@ -1,0 +1,7 @@
+/* Append to ~/.config/waybar/style.css */
+#custom-handsfree {
+  margin: 0 7px;
+}
+#custom-handsfree.listening {
+  color: #e06c75;
+}

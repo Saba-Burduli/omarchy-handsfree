@@ -46,6 +46,37 @@ standard or recommended option, with the reason.
   `handsfree-ctl setup` records consent and the daemon refuses devices
   without it.
 
+## What current Omarchy looks like (checked in basecamp/omarchy, branch `quattro`)
+- **Hyprland config is Lua now.** User bindings live in
+  `~/.config/hypr/bindings.lua` as `o.bind("SUPER + ALT + V", "desc", "cmd")`.
+  install.sh appends a marked block there, falling back to `bindings.conf`
+  (hyprlang `bindd`) on older installs; uninstall.sh removes the block.
+- **Hotkeys picked to avoid clashes:** Super+Alt+G is taken by Omarchy, so
+  the grid is Super+Alt+M. Super+Alt+V / Super+Shift+Alt+V / Super+Alt+E were
+  all free.
+- **Waybar is gone**; the bar is the Quickshell-based Omarchy shell with
+  manifest plugins in `~/.config/omarchy/plugins/<id>/`. A `handsfree.status`
+  bar-widget plugin is installed and enabled with `omarchy plugin enable`.
+  It uses only the documented widget contract (`bar`, `bar.run`, tooltips,
+  `Text.PlainText`) plus Quickshell's `FileView`, and polls the state file
+  because atomic replaces can drop file watches. The Waybar module and
+  RTMIN signal remain for older Omarchy installs.
+- **Launchers:** `omarchy-launch-browser [url]` and
+  `omarchy-launch-terminal [command...]` exist, so "open Claude Code" runs
+  `omarchy-launch-terminal claude` and URLs open via `omarchy-launch-browser`.
+- **Omarchy ships its own dictation** (Super+Ctrl+X, F9 hold) with pluggable
+  backends. handsfree's dictation is a separate mode for hands-free use and
+  does not touch those bindings. Registering handsfree as an Omarchy
+  dictation backend is a possible follow-up.
+
+## Verified on macOS (no Omarchy hardware here)
+- 81 unit tests (`python3 -m unittest`), shellcheck on both scripts.
+- Built the wheel with `uv build`, installed it into a Python 3.12 venv and
+  ran a `--dry-run` daemon session over the real socket: "Open Claude Code.",
+  "search for ...", "show grid", "seven", consent refusal, Waybar JSON.
+- Not verified: anything needing Linux hardware or Hyprland (mic capture,
+  Whisper, camera, MediaPipe, uinput, wtype, the GTK overlay, the QML widget).
+
 ## Known limitations
 - Gaze maps to the monitor that was focused when tracking started.
 - Webcam gaze is roughly 100-200 px accurate; the grid exists for small targets.

@@ -2,8 +2,8 @@
 # Override any of them in ~/.config/handsfree/config.toml.
 
 [desktop]
-# Opens URLs in the default browser.
-url_opener = ["xdg-open"]
+# Opens URLs in the default browser (use ["xdg-open"] outside Omarchy).
+url_opener = ["omarchy-launch-browser"]
 # Launches .desktop entries the same way Omarchy's launcher does.
 app_launcher = ["uwsm", "app", "--"]
 # Show what was heard and done via notify-send / mako.
@@ -28,6 +28,11 @@ silence_ms = 700         # pause that ends a command
 max_utterance_ms = 12000
 start_timeout_ms = 5000  # push-to-talk gives up after this much silence
 fuzzy_threshold = 82     # 0-100; how loosely phrases may match
+# Continuous mode only: wait for this openWakeWord model before each command
+# ("hey_jarvis", "alexa", "hey_mycroft"; install with ./install.sh --with-wake).
+# Empty = every sentence you say is treated as a command.
+wake_word = ""
+wake_threshold = 0.5
 # Primes Whisper with the words you use most.
 prompt = "Open browser. Open Google. Open Claude Code. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid."
 

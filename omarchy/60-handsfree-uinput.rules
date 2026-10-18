@@ -1,0 +1,5 @@
+# omarchy-handsfree: let the logged-in user create virtual input devices
+# (for voice/gaze clicks and key presses). "uaccess" grants access only to the
+# user on the active seat, unlike adding everyone to the "input" group, which
+# would also let any of their processes read every keyboard.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

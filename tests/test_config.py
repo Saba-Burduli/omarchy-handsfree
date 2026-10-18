@@ -9,7 +9,7 @@ class ConfigTest(unittest.TestCase):
     def test_defaults_load(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = Config.load(Path(tmp))
-        self.assertEqual(config.section("desktop")["url_opener"], ["xdg-open"])
+        self.assertEqual(config.section("desktop")["url_opener"], ["omarchy-launch-browser"])
 
     def test_user_settings_override_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:

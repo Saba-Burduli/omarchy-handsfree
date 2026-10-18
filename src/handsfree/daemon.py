@@ -35,6 +35,7 @@ class Daemon:
         self._lock = threading.RLock()
         self._stopping = threading.Event()
         self.state: dict[str, Any] = {
+            "pid": os.getpid(),  # lets the Waybar module spot a crashed daemon
             "voice": "off",  # off | continuous (push-to-talk works in both)
             "listening": False,
             "dictation": False,

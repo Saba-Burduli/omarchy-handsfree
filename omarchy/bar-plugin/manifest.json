@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "handsfree.status",
+  "name": "Hands-free",
+  "version": "0.1.0",
+  "author": "omarchy-handsfree",
+  "description": "Shows when hands-free voice or eye control is using the microphone or camera",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Hands-free",
+    "description": "Microphone and camera indicator for omarchy-handsfree",
+    "category": "System",
+    "allowMultiple": false
+  }
+}

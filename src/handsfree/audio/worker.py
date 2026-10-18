@@ -33,6 +33,7 @@ class VoiceWorker:
         self._finish = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
+        self._wake_word = None
         self.microphone = Microphone(int(settings.get("sample_rate", 16000)), settings.get("input_device"))
         self.transcriber = Transcriber(
             model=settings.get("model", "base.en"),
@@ -94,25 +95,43 @@ class VoiceWorker:
                 if text:
                     self.on_text(text)
 
-    def _endpoint_config(self, push_to_talk: bool) -> EndpointConfig:
+    def _endpoint_config(self, expect_speech: bool) -> EndpointConfig:
         s = self.settings
         return EndpointConfig(
             threshold=float(s.get("energy_threshold", 0.012)),
             silence_ms=int(s.get("silence_ms", 700)),
             max_ms=int(s.get("max_utterance_ms", 12000)),
-            start_timeout_ms=int(s.get("start_timeout_ms", 5000)) if push_to_talk else None,
+            start_timeout_ms=int(s.get("start_timeout_ms", 5000)) if expect_speech else None,
         )
 
+    def _wake(self):
+        if self._wake_word is None:
+            from .wake import WakeWord
+
+            self._wake_word = WakeWord(
+                self.settings["wake_word"],
+                float(self.settings.get("wake_threshold", 0.5)),
+                self.settings.get("input_device"),
+            )
+        return self._wake_word
+
     def _capture(self, push_to_talk: bool) -> str | None:
-        if push_to_talk:
+        # After push-to-talk or the wake word we expect speech right away;
+        # plain continuous mode waits for any speech, however long it takes.
+        expect_speech = push_to_talk
+        if not push_to_talk and self.settings.get("wake_word"):
+            if not self._wake().wait(self._cancel):
+                return None
+            expect_speech = True
+        if expect_speech:
             self.on_listening(True)
         self.recording = True
         try:
             audio = self.microphone.record_utterance(
-                self._endpoint_config(push_to_talk),
+                self._endpoint_config(expect_speech),
                 self._cancel,
                 self._finish,
-                on_speech=None if push_to_talk else lambda: self.on_listening(True),
+                on_speech=None if expect_speech else lambda: self.on_listening(True),
             )
         finally:
             self.recording = False

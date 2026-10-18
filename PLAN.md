@@ -16,6 +16,6 @@ fix failures, commit.
 - [x] 4. Gaze pointer: MediaPipe features, ridge-regression mapper, One Euro filter,
        calibration with GTK layer-shell overlay, per-monitor calibration store
 - [x] 5. Gaze clicking: dwell click, long-blink click, numbered mouse grid that zooms
-- [ ] 6. Polish: wake word (openWakeWord), Waybar module, first-run consent (`handsfree-ctl setup`),
+- [x] 6. Polish: wake word (openWakeWord), Waybar module, first-run consent (`handsfree-ctl setup`),
        Hyprland bindings, systemd unit, udev rule, `install.sh`, README
 - [ ] 7. Review pass: missing tests, bugs, cleanups; repeat until nothing useful is left
