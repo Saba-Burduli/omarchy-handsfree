@@ -98,7 +98,7 @@ Tips: face the camera with even light from the front, avoid glare on glasses, an
 
 ```toml
 [voice]
-model = "small.en"        # more accurate, slower; "tiny.en" is fastest
+model = "small.en"        # more accurate, slower; "tiny.en" is fastest (re-run install.sh)
 energy_threshold = 0.02   # raise it in a noisy room
 wake_word = "hey_jarvis"  # continuous mode waits for this (needs --with-wake)
 
@@ -125,7 +125,7 @@ handsfree --dry-run -v               # run in a terminal, log actions instead of
 - **"Not understood"**: check the log for what Whisper heard, and add that phrase to your commands.
 - **Clicks or keys do nothing**: check that `/dev/uinput writable` is `ok` in `doctor`; log out and back in after installing.
 - **No overlay during calibration**: `doctor` must show `gtk4-layer-shell` and the overlay Python as `ok`.
-- **Commands are slow**: use `model = "tiny.en"`, or a GPU with CUDA (`device = "auto"` picks it up).
+- **Commands are slow**: use `model = "tiny.en"` (then re-run `./install.sh` to download it), or a GPU with CUDA (`device = "auto"` picks it up).
 
 ## Uninstall
 

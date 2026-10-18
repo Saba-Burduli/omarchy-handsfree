@@ -10,13 +10,15 @@ log = logging.getLogger(__name__)
 
 class Transcriber:
     def __init__(self, model: str = "base.en", device: str = "auto", compute_type: str = "int8",
-                 language: str = "en", prompt: str = ""):
+                 language: str = "en", prompt: str = "", allow_download: bool = False):
         self.model_name = model
         self.device = device
         self.compute_type = compute_type
         self.language = language or None
         # Priming Whisper with the command vocabulary makes "Claude" beat "cloud".
         self.prompt = prompt or None
+        # Stay offline at runtime: only use models install.sh already fetched.
+        self.allow_download = allow_download
         self._model = None
         self._lock = threading.Lock()
 
@@ -32,7 +34,16 @@ class Transcriber:
                     device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
                 compute = "float16" if device == "cuda" and self.compute_type == "int8" else self.compute_type
                 log.info("loading whisper %s on %s (%s)", self.model_name, device, compute)
-                self._model = WhisperModel(self.model_name, device=device, compute_type=compute)
+                try:
+                    self._model = WhisperModel(self.model_name, device=device, compute_type=compute,
+                                               local_files_only=not self.allow_download)
+                except Exception as exc:
+                    if self.allow_download:
+                        raise
+                    raise RuntimeError(
+                        f"Whisper model {self.model_name!r} is not downloaded; re-run install.sh "
+                        "or set voice.allow_download = true"
+                    ) from exc
         return self._model
 
     def preload(self) -> None:

@@ -9,7 +9,6 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 BIN="$HOME/.local/bin"
 VENV="$DATA/venv"
 MODEL_URL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-WHISPER_MODEL="base.en"
 WAKE_MODEL="hey_jarvis"
 MARK_BEGIN="omarchy-handsfree >>>"
 
@@ -85,9 +84,10 @@ else
   curl -fL --create-dirs -o "$model.part" "$MODEL_URL"
   mv "$model.part" "$model"
 fi
-# Download once now so voice works offline from the first command.
-"$VENV/bin/python" -c "from faster_whisper import WhisperModel; WhisperModel('$WHISPER_MODEL', device='cpu', compute_type='int8')"
-note "Whisper $WHISPER_MODEL ready."
+# Download the configured model once now; at runtime it only loads from cache.
+whisper_model="$("$VENV/bin/python" -c "from handsfree.config import Config; print(Config.load().section('voice')['model'])")"
+"$VENV/bin/python" -c "from faster_whisper import WhisperModel; WhisperModel('$whisper_model', device='cpu', compute_type='int8')"
+note "Whisper $whisper_model ready (re-run install.sh after changing voice.model)."
 if [[ $WITH_WAKE == 1 ]]; then
   "$VENV/bin/python" -c "import openwakeword.utils as u; u.download_models(model_names=['$WAKE_MODEL'])"
   note "Wake word $WAKE_MODEL ready; set voice.wake_word = \"$WAKE_MODEL\" to use it."

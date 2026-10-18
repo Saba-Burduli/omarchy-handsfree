@@ -18,6 +18,9 @@ dictation_trailing_space = true
 [voice]
 # faster-whisper model: tiny.en (fastest), base.en, small.en (most accurate).
 model = "base.en"
+# Models are only loaded from the local cache, so nothing touches the network
+# at runtime. Set true to let a newly configured model download on first use.
+allow_download = false
 device = "auto"          # auto | cpu | cuda
 compute_type = "int8"    # int8 suits CPUs; CUDA switches to float16
 language = "en"

@@ -42,6 +42,7 @@ class VoiceWorker:
             compute_type=settings.get("compute_type", "int8"),
             language=settings.get("language", "en"),
             prompt=settings.get("prompt", ""),
+            allow_download=bool(settings.get("allow_download", False)),
         )
 
     # -- controls (called from the IPC thread) -------------------------------
