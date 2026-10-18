@@ -6,7 +6,7 @@
 url_opener = ["omarchy-launch-browser"]
 # Launches .desktop entries the same way Omarchy's launcher does.
 app_launcher = ["uwsm", "app", "--"]
-# Show what was heard and done via notify-send / mako.
+# Show what was heard and done as desktop notifications (notify-send).
 notify = true
 # RTMIN+N signal that refreshes the Waybar module; 0 disables.
 waybar_signal = 9
