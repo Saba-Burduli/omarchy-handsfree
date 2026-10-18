@@ -210,11 +210,11 @@ say = ["scroll right"]
 mouse = "scroll_right"
 
 [[command]]
-say = ["hold", "mouse down", "start drag"]
+say = ["hold click", "mouse down", "start drag"]
 mouse = "mouse_down"
 
 [[command]]
-say = ["release", "drop", "mouse up"]
+say = ["release", "release click", "drop", "mouse up"]
 mouse = "mouse_up"
 
 # -- Handsfree itself ---------------------------------------------------------

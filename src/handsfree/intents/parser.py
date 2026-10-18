@@ -15,6 +15,8 @@ from typing import Any, Protocol
 from .text import Tokens, parse_number, similarity, tokenize
 
 _SLOT = re.compile(r"^\{(\w+)\}$")
+# Fuzzy-matching very short phrases misfires ("old" -> "hold", "lick" -> "click").
+MIN_FUZZY_CHARS = 8
 _TRAILING_PUNCT = ".!?,;:"
 
 
@@ -106,8 +108,9 @@ class Parser:
                 exact = all(s >= 100 for s in scores)
                 rank = (3 if exact else 2, literals, min(scores, default=100.0), -index)
                 yield rank, Intent(command, slots, exact=exact)
-        if literals == len(pattern):
-            score = similarity(" ".join(tokens.norm), " ".join(pattern))  # type: ignore[arg-type]
+        phrase = " ".join(p for p in pattern if isinstance(p, str))
+        if literals == len(pattern) and len(phrase) >= MIN_FUZZY_CHARS:
+            score = similarity(" ".join(tokens.norm), phrase)
             if self.threshold <= score < 100:
                 yield (1, literals, score, -index), Intent(command, {}, exact=False)
 

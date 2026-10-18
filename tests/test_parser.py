@@ -66,6 +66,15 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(intent.command["run"], "omarchy-launch-browser")
         self.assertFalse(intent.exact)
 
+    def test_short_phrases_need_exact_match(self):
+        self.assertIsNone(self.parser.parse("old"))
+        self.assertIsNone(self.parser.parse("lick"))
+        self.assertEqual(self.parser.parse("click").command["mouse"], "click")
+
+    def test_number_alone_picks_grid_cell(self):
+        intent = self.parser.parse("Seven.")
+        self.assertEqual((intent.command["internal"], intent.slots["n"]), ("grid_pick", "7"))
+
     def test_nonsense(self):
         self.assertIsNone(self.parser.parse("the quick brown fox"))
         self.assertIsNone(self.parser.parse("..."))
