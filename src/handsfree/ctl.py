@@ -30,6 +30,9 @@ def _send(cmd: str, arg: Any = None) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="handsfree-ctl", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("listen", help="push-to-talk: listen for one command (press again to stop early)")
+    voice = sub.add_parser("voice", help="continuous listening")
+    voice.add_argument("mode", choices=["on", "off", "toggle"])
     say = sub.add_parser("say", help="run a command as if it was spoken")
     say.add_argument("text", nargs="+")
     sub.add_parser("status", help="print the daemon state")
@@ -38,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "say":
         return _send("say", " ".join(args.text))
+    if hasattr(args, "mode"):
+        return _send(args.cmd, args.mode)
     return _send(args.cmd)
 
 

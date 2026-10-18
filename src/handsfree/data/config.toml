@@ -10,3 +10,19 @@ app_launcher = ["uwsm", "app", "--"]
 notify = true
 # RTMIN+N signal that refreshes the Waybar module; 0 disables.
 waybar_signal = 9
+
+[voice]
+# faster-whisper model: tiny.en (fastest), base.en, small.en (most accurate).
+model = "base.en"
+device = "auto"          # auto | cpu | cuda
+compute_type = "int8"    # int8 suits CPUs; CUDA switches to float16
+language = "en"
+input_device = ""        # sounddevice name or index; empty = system default
+sample_rate = 16000
+energy_threshold = 0.012 # raise it in a noisy room
+silence_ms = 700         # pause that ends a command
+max_utterance_ms = 12000
+start_timeout_ms = 5000  # push-to-talk gives up after this much silence
+fuzzy_threshold = 82     # 0-100; how loosely phrases may match
+# Primes Whisper with the words you use most.
+prompt = "Open browser. Open Google. Open Claude Code. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid."

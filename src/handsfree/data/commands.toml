@@ -1,1 +1,121 @@
 # Voice commands for omarchy-handsfree.
+#
+# Add your own in ~/.config/handsfree/commands.toml using the same format.
+# Your commands are tried before these defaults; set `replace_defaults = true`
+# there to drop the defaults entirely. [sites] entries are merged.
+#
+# Phrases match case-insensitively with punctuation ignored. Slots:
+#   {text}  any words              {n}    a number ("two" or "2")
+#   {site}  a name from [sites]    {app}  an installed app (.desktop entry)
+#   {key}   a key combo ("control l", "enter")
+#
+# Each command has exactly one action:
+#   run       shell command; slot values are shell-quoted
+#   url       URL opened in the default browser; {text} is URL-encoded
+#   app       launch the application matched by {app}
+#   hypr      arguments for `hyprctl dispatch`
+#   type      text typed into the focused window
+#   key       key combo pressed on the virtual keyboard
+#   mouse     click | double_click | right_click | middle_click | mouse_down |
+#             mouse_up | scroll_up | scroll_down | scroll_left | scroll_right
+#   internal  a handsfree control (voice_on, dictation_on, gaze_on, grid, ...)
+
+[sites]
+google = "https://www.google.com"
+youtube = "https://www.youtube.com"
+github = "https://github.com"
+claude = "https://claude.ai"
+chatgpt = "https://chatgpt.com"
+gmail = "https://mail.google.com"
+"arch wiki" = "https://wiki.archlinux.org"
+"omarchy manual" = "https://learn.omacom.io/2/the-omarchy-manual"
+
+# -- Apps ---------------------------------------------------------------------
+
+[[command]]
+say = ["open browser", "open the browser", "launch browser", "new browser window"]
+run = "omarchy-launch-browser"
+
+# Whisper sometimes hears "Claude" as "cloud"; both are accepted.
+# Uses Omarchy's terminal launcher; change it if you use a different one.
+[[command]]
+say = ["open claude code", "launch claude code", "start claude code", "open cloud code"]
+run = "uwsm app -- xdg-terminal-exec claude"
+
+[[command]]
+say = ["open terminal", "open a terminal", "new terminal"]
+run = "uwsm app -- xdg-terminal-exec"
+
+[[command]]
+say = ["open {site}", "go to {site}", "show me {site}"]
+url = "{site}"
+
+[[command]]
+say = ["open {app}", "launch {app}", "start {app}"]
+app = "{app}"
+
+# -- Search -------------------------------------------------------------------
+
+[[command]]
+say = ["search youtube for {text}", "youtube search {text}"]
+url = "https://www.youtube.com/results?search_query={text}"
+
+[[command]]
+say = ["search for {text}", "search {text}", "google {text}", "look up {text}"]
+url = "https://www.google.com/search?q={text}"
+
+# -- Windows and workspaces ---------------------------------------------------
+
+[[command]]
+say = ["close window", "close this window", "close it"]
+hypr = "killactive"
+
+[[command]]
+say = ["fullscreen", "full screen", "toggle fullscreen"]
+hypr = "fullscreen 0"
+
+[[command]]
+say = ["float window", "toggle floating"]
+hypr = "togglefloating"
+
+[[command]]
+say = ["workspace {n}", "go to workspace {n}", "switch to workspace {n}"]
+hypr = "workspace {n}"
+
+[[command]]
+say = ["move to workspace {n}", "move window to workspace {n}"]
+hypr = "movetoworkspace {n}"
+
+[[command]]
+say = ["next workspace"]
+hypr = "workspace e+1"
+
+[[command]]
+say = ["previous workspace"]
+hypr = "workspace e-1"
+
+[[command]]
+say = ["focus left"]
+hypr = "movefocus l"
+
+[[command]]
+say = ["focus right"]
+hypr = "movefocus r"
+
+[[command]]
+say = ["focus up"]
+hypr = "movefocus u"
+
+[[command]]
+say = ["focus down"]
+hypr = "movefocus d"
+
+# -- Handsfree itself ---------------------------------------------------------
+
+[[command]]
+say = ["stop listening", "go to sleep", "voice off"]
+internal = "voice_off"
+
+[[command]]
+say = ["start listening", "keep listening", "voice on"]
+internal = "voice_on"

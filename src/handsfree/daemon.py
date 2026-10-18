@@ -12,9 +12,16 @@ from typing import Any
 from .config import Config, socket_path, state_file
 from .consent import Consent
 from .desktop import Desktop
+from .intents.actions import Executor
+from .intents.apps import LazyAppIndex
+from .intents.parser import Parser
 from .ipc import ControlServer
 
 log = logging.getLogger(__name__)
+
+
+class CommandError(Exception):
+    """A control request that can't be carried out; reported to the caller."""
 
 
 class Daemon:
@@ -24,14 +31,32 @@ class Daemon:
         self._lock = threading.RLock()
         self._stopping = threading.Event()
         self.state: dict[str, Any] = {
-            "voice": "off",  # off | push | continuous
+            "voice": "off",  # off | continuous (push-to-talk works in both)
             "listening": False,
             "dictation": False,
             "gaze": False,
             "grid": False,
             "last": "",
         }
+        voice = config.section("voice")
+        self.parser = Parser(
+            config.commands,
+            apps=LazyAppIndex(),
+            threshold=float(voice.get("fuzzy_threshold", 82)),
+        )
+        self.executor = Executor(desktop, self.internal)
+        self.voice = self._make_voice_worker(voice)
         self._server = ControlServer(socket_path(), self.handle_request)
+
+    def _make_voice_worker(self, settings: dict[str, Any]):
+        from .audio.worker import VoiceWorker
+
+        return VoiceWorker(
+            settings,
+            on_text=self.handle_text,
+            on_listening=lambda on: self._set(listening=on),
+            on_error=self._voice_failed,
+        )
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -46,6 +71,7 @@ class Daemon:
         self._stopping.set()
 
     def _shutdown(self) -> None:
+        self.voice.shutdown()
         self._server.close()
         state_file().unlink(missing_ok=True)
         self._signal_waybar()
@@ -88,7 +114,10 @@ class Daemon:
         handler = getattr(self, f"_cmd_{cmd}", None)
         if handler is None:
             return {"ok": False, "error": f"unknown command: {cmd!r}"}
-        result = handler(request.get("arg"))
+        try:
+            result = handler(request.get("arg"))
+        except CommandError as exc:
+            return {"ok": False, "error": str(exc)}
         if isinstance(result, dict):
             return {"ok": True, **result}
         return {"ok": True, "message": result or ""}
@@ -104,7 +133,41 @@ class Daemon:
         self.stop()
         return "stopping"
 
-    # -- speech --------------------------------------------------------------
+    def _cmd_listen(self, _arg: Any) -> str:
+        self._require("microphone")
+        return self.voice.listen_once()
+
+    def _cmd_voice(self, mode: Any) -> str:
+        return self.set_voice(self._toggle(mode, self.state["voice"] == "continuous"))
+
+    @staticmethod
+    def _toggle(mode: Any, current: bool) -> bool:
+        if mode == "on":
+            return True
+        if mode == "off":
+            return False
+        if mode == "toggle":
+            return not current
+        raise CommandError(f"expected on, off or toggle, not {mode!r}")
+
+    def _require(self, device: str) -> None:
+        if not getattr(self._consent(), device):
+            self._notify(f"{device.capitalize()} access is off", "Run `handsfree-ctl setup` to allow it.")
+            raise CommandError(f"{device} access not granted; run `handsfree-ctl setup`")
+
+    # -- voice ---------------------------------------------------------------
+
+    def set_voice(self, on: bool) -> str:
+        if on:
+            self._require("microphone")
+        self.voice.set_continuous(on)
+        self._set(voice="continuous" if on else "off")
+        self._notify("Listening continuously" if on else "Stopped listening")
+        return "voice on" if on else "voice off"
+
+    def _voice_failed(self, exc: Exception) -> None:
+        self._set(voice="off", listening=False)
+        self._notify("Voice control stopped", str(exc))
 
     def handle_text(self, text: str) -> str:
         text = text.strip()
@@ -112,4 +175,28 @@ class Daemon:
             return "nothing heard"
         log.info("heard: %s", text)
         self._set(last=text)
-        return f"heard: {text}"
+        intent = self.parser.parse(text)
+        if intent is None:
+            self._notify("Not understood", f"“{text}”")
+            return f"not understood: {text}"
+        try:
+            result = self.executor.execute(intent)
+        except Exception as exc:
+            log.exception("command failed: %s", text)
+            self._notify(f"Failed: “{text}”", str(exc))
+            return f"failed: {exc}"
+        log.info("-> %s", result)
+        self._notify(f"“{text}”", result)
+        return result
+
+    def internal(self, name: str, slots: dict[str, Any]) -> str:
+        handler = getattr(self, f"_internal_{name}", None)
+        if handler is None:
+            raise ValueError(f"unknown internal command {name!r}")
+        return handler(slots)
+
+    def _internal_voice_on(self, _slots: dict[str, Any]) -> str:
+        return self.set_voice(True)
+
+    def _internal_voice_off(self, _slots: dict[str, Any]) -> str:
+        return self.set_voice(False)
