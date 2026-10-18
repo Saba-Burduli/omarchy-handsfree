@@ -18,4 +18,16 @@ fix failures, commit.
 - [x] 5. Gaze clicking: dwell click, long-blink click, numbered mouse grid that zooms
 - [x] 6. Polish: wake word (openWakeWord), Waybar module, first-run consent (`handsfree-ctl setup`),
        Hyprland bindings, systemd unit, udev rule, `install.sh`, README
-- [ ] 7. Review pass: missing tests, bugs, cleanups; repeat until nothing useful is left
+- [x] 7. Review pass: missing tests, bugs, cleanups; repeat until nothing useful is left
+       Fixed: wake-word mode crash (name clash), state-file write race, short-phrase
+       fuzzy misfires, calibration stall without a camera, grid pause after calibration,
+       "not understood" spam in continuous mode, runtime network access by Whisper,
+       push-to-talk blocked by wake-word wait. Added tests for the hardware layers
+       with fakes and checked real Whisper / MediaPipe / openWakeWord APIs.
+
+## Next (needs an Omarchy machine)
+- [ ] Run ./install.sh, then `handsfree-ctl doctor`; fix anything it flags.
+- [ ] Try the README's voice commands with push-to-talk; tune `energy_threshold`.
+- [ ] Calibrate and note the reported error; check the overlay and the grid render.
+- [ ] Confirm the bar widget appears and the icons change with state.
+- [ ] Possible follow-up: register handsfree as an Omarchy dictation backend.

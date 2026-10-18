@@ -32,6 +32,9 @@ standard or recommended option, with the reason.
   Continuous listening and the wake word are opt-in.
 - **Energy-based endpointing** decides when to stop recording; Whisper's
   built-in Silero VAD trims silence inside the clip. Avoids a torch dependency.
+- **No network at runtime.** faster-whisper would otherwise check Hugging
+  Face for model updates on every start. install.sh downloads the configured
+  model; `voice.allow_download = true` opts back in.
 - **Whisper `initial_prompt`** primed with command words so "Claude" isn't
   heard as "cloud" (an alias "open cloud code" is also included).
 - **Gaze model:** iris position relative to the eye corners (scale invariant)
@@ -81,6 +84,11 @@ standard or recommended option, with the reason.
     one-time model load. Reproduce with `dev/check_stt.py`.
   - `FaceTracker` against MediaPipe's own sample portrait and model:
     stable features across frames, low blink score, `None` on a blank frame.
+  - openWakeWord `hey_jarvis` (onnx): peak score 0.999 on a synthesized
+    "Hey Jarvis", 0.0 on "Open Google".
+  - Whisper loads from the local cache with `local_files_only=True`, and a
+    model that isn't cached fails with a clear message instead of
+    silently downloading.
 - Hardware layers tested with fakes: Hyprland socket protocol (real Unix
   socket), uinput event sequences (fake evdev), overlay process protocol,
   notify-send arguments, wtype stdin.
