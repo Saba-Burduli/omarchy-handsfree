@@ -25,6 +25,10 @@ class ExecutorTest(unittest.TestCase):
         self.executor.execute(Intent({"url": "{site}"}, {"site": "https://claude.ai"}))
         self.assertEqual(self.last(), ("open_url", ("https://claude.ai",)))
 
+    def test_url_unhyphenates_whisper_names(self):
+        self.executor.execute(Intent({"url": "https://g.co/?q={text}"}, {"text": "Arch-Wicki-Hipperland - tips"}))
+        self.assertEqual(self.last(), ("open_url", ("https://g.co/?q=Arch+Wicki+Hipperland+-+tips",)))
+
     def test_app(self):
         self.executor.execute(Intent({"app": "{app}"}, {"app": AppEntry("firefox.desktop", "Firefox")}))
         self.assertEqual(self.last(), ("launch_app", ("firefox.desktop",)))

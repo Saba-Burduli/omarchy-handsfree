@@ -22,13 +22,19 @@ def fill(template: str, slots: dict[str, Any], quote: Callable[[str], str]) -> s
         if name not in slots:
             raise KeyError(f"command uses {{{name}}} but its phrase has no such slot")
         value = str(slots[name])
-        return value if name in RAW_SLOTS and quote is quote_plus else quote(value)
+        return value if name in RAW_SLOTS and quote is _query else quote(value)
 
     return re.sub(r"\{(\w+)\}", substitute, template)
 
 
 def _same(value: str) -> str:
     return value
+
+
+def _query(value: str) -> str:
+    # Whisper hyphenates names it doesn't know ("Arch-Wicki-Hipperland");
+    # search engines do better with plain words.
+    return quote_plus(re.sub(r"(?<=\w)-(?=\w)", " ", value))
 
 
 class Executor:
@@ -48,7 +54,7 @@ class Executor:
         return f"ran {command}"
 
     def _url(self, template: str, slots: dict[str, Any]) -> str:
-        url = fill(template, slots, quote_plus)
+        url = fill(template, slots, _query)
         self.desktop.open_url(url)
         return f"opened {url}"
 

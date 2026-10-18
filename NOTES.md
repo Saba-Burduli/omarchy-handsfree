@@ -74,8 +74,19 @@ standard or recommended option, with the reason.
 - Built the wheel with `uv build`, installed it into a Python 3.12 venv and
   ran a `--dry-run` daemon session over the real socket: "Open Claude Code.",
   "search for ...", "show grid", "seven", consent refusal, Waybar JSON.
-- Not verified: anything needing Linux hardware or Hyprland (mic capture,
-  Whisper, camera, MediaPipe, uinput, wtype, the GTK overlay, the QML widget).
+- Real libraries in a Python 3.12 venv (faster-whisper 1.2.1, MediaPipe
+  1.1.1, OpenCV 5.0):
+  - Whisper `base.en` on CPU, fed 14 commands synthesized with macOS `say`:
+    14/14 transcribed and mapped to the right action, ~0.2 s each after a
+    one-time model load. Reproduce with `dev/check_stt.py`.
+  - `FaceTracker` against MediaPipe's own sample portrait and model:
+    stable features across frames, low blink score, `None` on a blank frame.
+- Hardware layers tested with fakes: Hyprland socket protocol (real Unix
+  socket), uinput event sequences (fake evdev), overlay process protocol,
+  notify-send arguments, wtype stdin.
+- Not verified: a live microphone, a live webcam, real uinput/wtype on
+  Wayland, the GTK layer-shell overlay, and the QML bar widget. These need an
+  Omarchy machine; `handsfree-ctl doctor` checks the environment first.
 
 ## Known limitations
 - Gaze maps to the monitor that was focused when tracking started.
