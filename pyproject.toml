@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "omarchy-handsfree"
+version = "0.1.0"
+description = "Offline voice and eye control for Omarchy (Hyprland)"
+readme = "README.md"
+# mediapipe wheels lag the newest CPython; install.sh pins 3.12 with uv.
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+voice = ["numpy>=1.26", "sounddevice>=0.4.6", "faster-whisper>=1.0", "rapidfuzz>=3.0"]
+wake = ["openwakeword>=0.6"]
+gaze = ["numpy>=1.26", "opencv-python-headless>=4.9", "mediapipe>=0.10.14"]
+input = ["evdev>=1.7"]
+all = ["omarchy-handsfree[voice,gaze,input]"]
+
+[project.scripts]
+handsfree = "handsfree.__main__:main"
+handsfree-ctl = "handsfree.ctl:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/handsfree"]
