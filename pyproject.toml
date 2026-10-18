@@ -7,6 +7,8 @@ name = "omarchy-handsfree"
 version = "0.1.0"
 description = "Offline voice and eye control for Omarchy (Hyprland)"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 # mediapipe wheels lag the newest CPython; install.sh pins 3.12 with uv.
 requires-python = ">=3.11,<3.13"
 dependencies = []
