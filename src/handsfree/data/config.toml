@@ -10,6 +10,10 @@ app_launcher = ["uwsm", "app", "--"]
 notify = true
 # RTMIN+N signal that refreshes the Waybar module; 0 disables.
 waybar_signal = 9
+# Wheel clicks per "scroll up/down".
+scroll_steps = 5
+# Add a space after each dictated phrase so sentences run on.
+dictation_trailing_space = true
 
 [voice]
 # faster-whisper model: tiny.en (fastest), base.en, small.en (most accurate).

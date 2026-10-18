@@ -7,6 +7,7 @@ from typing import Any
 
 from . import Monitor
 from .hypr import Hyprland
+from .keys import parse_combo
 from .notify import Notifier
 
 
@@ -27,6 +28,14 @@ class OmarchyDesktop:
         self.gaze_settings = gaze_settings
         self.hyprland = Hyprland()
         self.notifier = Notifier()
+        self._input = None
+
+    def _virtual_input(self):
+        if self._input is None:
+            from .uinput import VirtualInput
+
+            self._input = VirtualInput(int(self.settings.get("scroll_steps", 5)))
+        return self._input
 
     def run_shell(self, command: str) -> None:
         _spawn(["sh", "-c", command])
@@ -41,13 +50,15 @@ class OmarchyDesktop:
         self.hyprland.dispatch(args)
 
     def type_text(self, text: str) -> None:
-        raise NotImplementedError("typing is not available yet")
+        # wtype handles any Unicode via the virtual-keyboard protocol; stdin
+        # avoids text that starts with "-" being read as an option.
+        subprocess.run(["wtype", "-"], input=text, text=True, check=True, timeout=30)
 
     def key(self, combo: str) -> None:
-        raise NotImplementedError("key presses are not available yet")
+        self._virtual_input().key_combo(parse_combo(combo))
 
     def mouse(self, op: str) -> None:
-        raise NotImplementedError("mouse control is not available yet")
+        self._virtual_input().mouse(op)
 
     def move_cursor(self, x: float, y: float) -> None:
         self.hyprland.move_cursor(x, y)

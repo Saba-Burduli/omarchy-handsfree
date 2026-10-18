@@ -19,6 +19,9 @@
 #   mouse     click | double_click | right_click | middle_click | mouse_down |
 #             mouse_up | scroll_up | scroll_down | scroll_left | scroll_right
 #   internal  a handsfree control (voice_on, dictation_on, gaze_on, grid, ...)
+#
+# In dictation mode everything you say is typed, except commands marked
+# `dictation = true`, which still run when matched exactly.
 
 [sites]
 google = "https://www.google.com"
@@ -110,12 +113,127 @@ hypr = "movefocus u"
 say = ["focus down"]
 hypr = "movefocus d"
 
+# -- Typing and keys ----------------------------------------------------------
+
+[[command]]
+say = ["type {text}", "write {text}"]
+type = "{text}"
+
+[[command]]
+say = ["press {key}", "hit {key}"]
+key = "{key}"
+
+[[command]]
+say = ["new line", "press enter"]
+key = "enter"
+dictation = true
+
+[[command]]
+say = ["undo"]
+key = "ctrl z"
+
+[[command]]
+say = ["redo"]
+key = "ctrl shift z"
+
+[[command]]
+say = ["copy", "copy that"]
+key = "ctrl c"
+
+[[command]]
+say = ["paste", "paste that"]
+key = "ctrl v"
+
+[[command]]
+say = ["select all"]
+key = "ctrl a"
+
+[[command]]
+say = ["save", "save file"]
+key = "ctrl s"
+
+[[command]]
+say = ["new tab"]
+key = "ctrl t"
+
+[[command]]
+say = ["close tab"]
+key = "ctrl w"
+
+[[command]]
+say = ["go back"]
+key = "alt left"
+
+[[command]]
+say = ["go forward"]
+key = "alt right"
+
+[[command]]
+say = ["reload", "refresh", "reload page"]
+key = "ctrl r"
+
+[[command]]
+say = ["address bar", "focus address bar"]
+key = "ctrl l"
+
+# -- Mouse (acts at the pointer, which gaze or the grid can move) -------------
+
+[[command]]
+say = ["click", "left click", "click it", "click that"]
+mouse = "click"
+
+[[command]]
+say = ["double click"]
+mouse = "double_click"
+
+[[command]]
+say = ["right click"]
+mouse = "right_click"
+
+[[command]]
+say = ["middle click"]
+mouse = "middle_click"
+
+[[command]]
+say = ["scroll down", "page down"]
+mouse = "scroll_down"
+
+[[command]]
+say = ["scroll up", "page up"]
+mouse = "scroll_up"
+
+[[command]]
+say = ["scroll left"]
+mouse = "scroll_left"
+
+[[command]]
+say = ["scroll right"]
+mouse = "scroll_right"
+
+[[command]]
+say = ["hold", "mouse down", "start drag"]
+mouse = "mouse_down"
+
+[[command]]
+say = ["release", "drop", "mouse up"]
+mouse = "mouse_up"
+
 # -- Handsfree itself ---------------------------------------------------------
 
 [[command]]
 say = ["stop listening", "go to sleep", "voice off"]
 internal = "voice_off"
+dictation = true
 
 [[command]]
 say = ["start listening", "keep listening", "voice on"]
 internal = "voice_on"
+
+[[command]]
+say = ["start dictation", "dictation on", "dictation mode"]
+internal = "dictation_on"
+
+[[command]]
+say = ["stop dictation", "dictation off", "end dictation"]
+internal = "dictation_off"
+dictation = true

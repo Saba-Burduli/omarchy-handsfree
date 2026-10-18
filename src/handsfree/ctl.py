@@ -33,6 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("listen", help="push-to-talk: listen for one command (press again to stop early)")
     voice = sub.add_parser("voice", help="continuous listening")
     voice.add_argument("mode", choices=["on", "off", "toggle"])
+    dictation = sub.add_parser("dictation", help="type everything you say")
+    dictation.add_argument("mode", choices=["on", "off", "toggle"])
     say = sub.add_parser("say", help="run a command as if it was spoken")
     say.add_argument("text", nargs="+")
     sub.add_parser("status", help="print the daemon state")

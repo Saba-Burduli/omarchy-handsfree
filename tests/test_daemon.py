@@ -38,6 +38,41 @@ class DaemonTest(unittest.TestCase):
         self.daemon.handle_request({"cmd": "say", "arg": "hello"})
         self.assertEqual(self.daemon.state["last"], "hello")
 
+    def say(self, text):
+        return self.daemon.handle_request({"cmd": "say", "arg": text})
+
+    def actions(self):
+        return [c for c in self.desktop.calls if c[0] != "notify"]
+
+    def test_say_runs_command(self):
+        self.say("Open Google.")
+        self.assertEqual(self.actions()[-1], ("open_url", ("https://www.google.com",)))
+
+    def test_unknown_phrase_notifies(self):
+        self.assertIn("not understood", self.say("blah blah blah")["message"])
+
+    def test_listen_requires_consent(self):
+        response = self.daemon.handle_request({"cmd": "listen"})
+        self.assertFalse(response["ok"])
+        self.assertIn("setup", response["error"])
+
+    def test_dictation_types_everything_but_escape_commands(self):
+        self.say("start dictation")
+        self.assertTrue(self.daemon.state["dictation"])
+        self.say("Open Google, she said.")
+        self.say("new line")
+        self.say("Stop dictation.")
+        self.say("open google")
+        self.assertEqual(self.actions(), [
+            ("type_text", ("Open Google, she said. ",)),
+            ("key", ("enter",)),
+            ("open_url", ("https://www.google.com",)),
+        ])
+        self.assertFalse(self.daemon.state["dictation"])
+
+    def test_bad_toggle(self):
+        self.assertFalse(self.daemon.handle_request({"cmd": "dictation", "arg": "maybe"})["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

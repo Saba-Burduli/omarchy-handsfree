@@ -140,6 +140,9 @@ class Daemon:
     def _cmd_voice(self, mode: Any) -> str:
         return self.set_voice(self._toggle(mode, self.state["voice"] == "continuous"))
 
+    def _cmd_dictation(self, mode: Any) -> str:
+        return self.set_dictation(self._toggle(mode, self.state["dictation"]))
+
     @staticmethod
     def _toggle(mode: Any, current: bool) -> bool:
         if mode == "on":
@@ -176,6 +179,8 @@ class Daemon:
         log.info("heard: %s", text)
         self._set(last=text)
         intent = self.parser.parse(text)
+        if self.state["dictation"] and not (intent and intent.exact and intent.command.get("dictation")):
+            return self._dictate(text)
         if intent is None:
             self._notify("Not understood", f"“{text}”")
             return f"not understood: {text}"
@@ -189,6 +194,28 @@ class Daemon:
         self._notify(f"“{text}”", result)
         return result
 
+    def _dictate(self, text: str) -> str:
+        if self.config.section("desktop").get("dictation_trailing_space", True):
+            text += " "
+        try:
+            self.desktop.type_text(text)
+        except Exception as exc:
+            log.exception("dictation failed")
+            self._notify("Dictation failed", str(exc))
+            return f"failed: {exc}"
+        return f'typed "{text}"'
+
+    def set_dictation(self, on: bool) -> str:
+        self._set(dictation=on)
+        if on:
+            hint = "Say \u201cstop dictation\u201d to finish."
+            if self.state["voice"] != "continuous":
+                hint += " Use push-to-talk or \u201cstart listening\u201d."
+            self._notify("Dictation on", hint)
+        else:
+            self._notify("Dictation off")
+        return "dictation on" if on else "dictation off"
+
     def internal(self, name: str, slots: dict[str, Any]) -> str:
         handler = getattr(self, f"_internal_{name}", None)
         if handler is None:
@@ -200,3 +227,9 @@ class Daemon:
 
     def _internal_voice_off(self, _slots: dict[str, Any]) -> str:
         return self.set_voice(False)
+
+    def _internal_dictation_on(self, _slots: dict[str, Any]) -> str:
+        return self.set_dictation(True)
+
+    def _internal_dictation_off(self, _slots: dict[str, Any]) -> str:
+        return self.set_dictation(False)
