@@ -39,6 +39,7 @@ class Desktop(Protocol):
     def mouse(self, op: str) -> None: ...
     def move_cursor(self, x: float, y: float) -> None: ...
     def focused_monitor(self) -> Monitor: ...
+    def overlay(self, monitor: Monitor) -> Any: ...
     def notify(self, title: str, body: str = "") -> None: ...
 
 
@@ -80,6 +81,13 @@ class DryRunDesktop:
 
     def focused_monitor(self) -> Monitor:
         return self.monitor
+
+    def overlay(self, monitor: Monitor):
+        from .overlay_client import NullOverlay
+
+        self._record("overlay", monitor.name)
+        self.last_overlay = NullOverlay()
+        return self.last_overlay
 
     def notify(self, title: str, body: str = "") -> None:
         self._record("notify", title, body)

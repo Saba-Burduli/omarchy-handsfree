@@ -230,6 +230,18 @@ say = ["start listening", "keep listening", "voice on"]
 internal = "voice_on"
 
 [[command]]
+say = ["start eye tracking", "eye tracking on", "eyes on", "gaze on", "track my eyes"]
+internal = "gaze_on"
+
+[[command]]
+say = ["stop eye tracking", "eye tracking off", "eyes off", "gaze off"]
+internal = "gaze_off"
+
+[[command]]
+say = ["calibrate", "calibrate eyes", "calibrate eye tracking"]
+internal = "calibrate"
+
+[[command]]
 say = ["start dictation", "dictation on", "dictation mode"]
 internal = "dictation_on"
 

@@ -7,11 +7,14 @@ import logging
 import os
 import subprocess
 import threading
+import time
 from typing import Any
 
 from .config import Config, socket_path, state_file
 from .consent import Consent
 from .desktop import Desktop
+from .gaze.calibrate import CalibrationError, CalibrationStore, run_calibration
+from .gaze.engine import GazeEngine
 from .intents.actions import Executor
 from .intents.apps import LazyAppIndex
 from .intents.parser import Parser
@@ -35,6 +38,7 @@ class Daemon:
             "listening": False,
             "dictation": False,
             "gaze": False,
+            "calibrating": False,
             "grid": False,
             "last": "",
         }
@@ -46,6 +50,10 @@ class Daemon:
         )
         self.executor = Executor(desktop, self.internal)
         self.voice = self._make_voice_worker(voice)
+        self.gaze = GazeEngine(config.section("gaze"), desktop, on_error=self._gaze_failed)
+        self.calibrations = CalibrationStore()
+        self._calibrating = threading.Lock()
+        self._sleep = time.sleep
         self._server = ControlServer(socket_path(), self.handle_request)
 
     def _make_voice_worker(self, settings: dict[str, Any]):
@@ -72,6 +80,7 @@ class Daemon:
 
     def _shutdown(self) -> None:
         self.voice.shutdown()
+        self.gaze.stop()
         self._server.close()
         state_file().unlink(missing_ok=True)
         self._signal_waybar()
@@ -139,6 +148,12 @@ class Daemon:
 
     def _cmd_voice(self, mode: Any) -> str:
         return self.set_voice(self._toggle(mode, self.state["voice"] == "continuous"))
+
+    def _cmd_gaze(self, mode: Any) -> str:
+        return self.set_gaze(self._toggle(mode, self.state["gaze"]))
+
+    def _cmd_calibrate(self, _arg: Any) -> str:
+        return self.calibrate()
 
     def _cmd_dictation(self, mode: Any) -> str:
         return self.set_dictation(self._toggle(mode, self.state["dictation"]))
@@ -216,6 +231,80 @@ class Daemon:
             self._notify("Dictation off")
         return "dictation on" if on else "dictation off"
 
+    # -- gaze ----------------------------------------------------------------
+
+    def set_gaze(self, on: bool) -> str:
+        if not on:
+            self.gaze.stop()
+            self._set(gaze=False)
+            self._notify("Eye tracking off")
+            return "gaze off"
+        self._require("camera")
+        monitor = self.desktop.focused_monitor()
+        mapper = self.calibrations.load(monitor)
+        self.gaze.set_mapping(mapper, monitor)
+        self.gaze.start()
+        self._set(gaze=True)
+        if mapper is None:
+            self._notify("Eye tracking on", "Not calibrated for this screen yet; say \u201ccalibrate\u201d.")
+        else:
+            self._notify("Eye tracking on")
+        return "gaze on"
+
+    def _gaze_failed(self, exc: Exception) -> None:
+        self._set(gaze=False)
+        self._notify("Eye tracking stopped", str(exc))
+
+    def calibrate(self) -> str:
+        self._require("camera")
+        if not self._calibrating.acquire(blocking=False):
+            return "already calibrating"
+        threading.Thread(target=self._calibrate, name="calibrate", daemon=True).start()
+        return "calibrating"
+
+    def _wait_for_face(self, timeout: float = 15.0) -> None:
+        seen = threading.Event()
+
+        def sink(_obs: Any) -> None:
+            seen.set()
+
+        self.gaze.add_sink(sink)
+        try:
+            if not seen.wait(timeout):
+                raise CalibrationError("No face seen by the camera; sit in front of it and try again")
+        finally:
+            self.gaze.remove_sink(sink)
+
+    def _calibrate(self) -> None:
+        settings = self.config.section("gaze")
+        monitor = self.desktop.focused_monitor()
+        overlay = None
+        self.gaze.paused = True
+        self.gaze.set_mapping(self.calibrations.load(monitor), monitor)
+        self.gaze.start()
+        self._set(gaze=True, calibrating=True)
+        try:
+            self._wait_for_face()
+            overlay = self.desktop.overlay(monitor)
+            mapper, error = run_calibration(
+                self.gaze, overlay, monitor,
+                points=int(settings.get("calibration_points", 9)),
+                sleep=self._sleep,
+            )
+            self.calibrations.save(monitor, mapper, error)
+            self.gaze.set_mapping(mapper, monitor)
+            log.info("calibrated %s: %.0f px mean error", monitor.name, error)
+            self._notify("Calibrated", f"Average error about {error:.0f} px. Say \u201cgrid\u201d for small targets.")
+        except Exception as exc:
+            log.exception("calibration failed")
+            self._notify("Calibration failed", str(exc))
+        finally:
+            if overlay is not None:
+                overlay.close()
+            self.gaze.paused = False
+            self._calibrating.release()
+            self._set(calibrating=False)
+
     def internal(self, name: str, slots: dict[str, Any]) -> str:
         handler = getattr(self, f"_internal_{name}", None)
         if handler is None:
@@ -227,6 +316,15 @@ class Daemon:
 
     def _internal_voice_off(self, _slots: dict[str, Any]) -> str:
         return self.set_voice(False)
+
+    def _internal_gaze_on(self, _slots: dict[str, Any]) -> str:
+        return self.set_gaze(True)
+
+    def _internal_gaze_off(self, _slots: dict[str, Any]) -> str:
+        return self.set_gaze(False)
+
+    def _internal_calibrate(self, _slots: dict[str, Any]) -> str:
+        return self.calibrate()
 
     def _internal_dictation_on(self, _slots: dict[str, Any]) -> str:
         return self.set_dictation(True)

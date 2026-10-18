@@ -30,3 +30,17 @@ start_timeout_ms = 5000  # push-to-talk gives up after this much silence
 fuzzy_threshold = 82     # 0-100; how loosely phrases may match
 # Primes Whisper with the words you use most.
 prompt = "Open browser. Open Google. Open Claude Code. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid."
+
+[gaze]
+camera = 0               # V4L2 index or a path such as "/dev/video0"
+width = 640
+height = 480
+fps = 30
+model = ""               # empty = ~/.local/share/omarchy-handsfree/models/face_landmarker.task
+calibration_points = 9   # 9 (3x3) or 16 (4x4, more accurate, takes longer)
+# One Euro smoothing: lower min_cutoff = steadier pointer, higher beta = snappier.
+min_cutoff = 0.4
+beta = 0.001
+# The overlay runs under the system Python with gtk4-layer-shell preloaded.
+overlay_python = "/usr/bin/python3"
+layer_shell_lib = "/usr/lib/libgtk4-layer-shell.so"

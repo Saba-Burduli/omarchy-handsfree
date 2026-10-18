@@ -66,5 +66,14 @@ class OmarchyDesktop:
     def focused_monitor(self) -> Monitor:
         return self.hyprland.focused_monitor()
 
+    def overlay(self, monitor: Monitor):
+        from .overlay_client import Overlay
+
+        return Overlay(
+            monitor.name,
+            python=self.gaze_settings.get("overlay_python", "/usr/bin/python3"),
+            layer_shell_lib=self.gaze_settings.get("layer_shell_lib", "/usr/lib/libgtk4-layer-shell.so"),
+        )
+
     def notify(self, title: str, body: str = "") -> None:
         self.notifier.show(title, body)
