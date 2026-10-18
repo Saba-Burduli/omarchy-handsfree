@@ -46,6 +46,24 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(self.heard, [("open google", True)])
         self.assertEqual(self.listening[:1], [True])
 
+    def test_push_to_talk_interrupts_wake_word_wait(self):
+        class FakeWake:
+            def wait(self, cancel):
+                cancel.wait(5)
+                return False
+
+        worker = self.make(["open browser"], wake_word="hey_jarvis")
+        worker._wake_word = FakeWake()
+        worker.set_continuous(True)
+        deadline = time.monotonic() + 2
+        while not worker.awaiting_wake_word and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(worker.awaiting_wake_word)
+        worker.listen_once()
+        self.assertTrue(self.done.wait(2))
+        self.assertEqual(self.heard, [("open browser", True)])
+        worker.set_continuous(False)
+
     def test_continuous_until_turned_off(self):
         worker = self.make(["one", "two"])
         worker.set_continuous(True)

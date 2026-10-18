@@ -27,6 +27,7 @@ class VoiceWorker:
         self.on_error = on_error
         self.continuous = False
         self.recording = False
+        self.awaiting_wake_word = False
         self._wake = threading.Event()
         self._once = threading.Event()
         self._cancel = threading.Event()
@@ -51,6 +52,8 @@ class VoiceWorker:
             return "processing"
         self._ensure_thread()
         self._once.set()
+        if self.awaiting_wake_word:
+            self._cancel.set()  # push-to-talk shouldn't have to wait for the wake word
         self._wake.set()
         return "listening"
 
@@ -104,7 +107,7 @@ class VoiceWorker:
             start_timeout_ms=int(s.get("start_timeout_ms", 5000)) if expect_speech else None,
         )
 
-    def _wake(self):
+    def _wake_detector(self):
         if self._wake_word is None:
             from .wake import WakeWord
 
@@ -120,7 +123,12 @@ class VoiceWorker:
         # plain continuous mode waits for any speech, however long it takes.
         expect_speech = push_to_talk
         if not push_to_talk and self.settings.get("wake_word"):
-            if not self._wake().wait(self._cancel):
+            self.awaiting_wake_word = True
+            try:
+                heard = self._wake_detector().wait(self._cancel)
+            finally:
+                self.awaiting_wake_word = False
+            if not heard:
                 return None
             expect_speech = True
         if expect_speech:
