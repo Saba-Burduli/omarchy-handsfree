@@ -93,7 +93,7 @@ class GazeEngine:
 
         s = self.settings
         try:
-            with FaceTracker(model_path(s), s.get("camera", 0), int(s.get("width", 640)),
+            with FaceTracker(model_path(s), s.get("camera", "auto"), int(s.get("width", 640)),
                              int(s.get("height", 480)), int(s.get("fps", 30))) as tracker:
                 log.info("camera on")
                 while not self._stop.is_set():

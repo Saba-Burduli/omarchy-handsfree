@@ -29,6 +29,20 @@ def fake_features(x, y, noise=0.0, rng=random):
     )
 
 
+class CameraChoiceTest(unittest.TestCase):
+    def test_auto_tries_every_node_in_numeric_order(self):
+        from handsfree.gaze.camera import camera_candidates
+
+        devices = ["/dev/video42", "/dev/video10", "/dev/video2"]
+        self.assertEqual(camera_candidates("auto", devices), ["/dev/video2", "/dev/video10", "/dev/video42"])
+
+    def test_explicit_camera_is_used_as_is(self):
+        from handsfree.gaze.camera import camera_candidates
+
+        self.assertEqual(camera_candidates(0, ["/dev/video42"]), [0])
+        self.assertEqual(camera_candidates("/dev/video3", []), ["/dev/video3"])
+
+
 class FeaturesTest(unittest.TestCase):
     def landmarks(self, iris_offset):
         lm = [(0.0, 0.0)] * 478

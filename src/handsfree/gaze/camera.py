@@ -8,8 +8,36 @@ from pathlib import Path
 from .features import Observation, feature_vector
 
 
+def camera_candidates(setting: int | str, devices: list[str] | None = None) -> list[int | str]:
+    """What to try opening, in order. "auto" tries every /dev/video* node:
+    the camera is not always video0 (Try Omarchy's is video42), and some
+    nodes are metadata-only."""
+    if setting not in ("auto", "", None):
+        return [setting]
+    if devices is None:
+        devices = [str(p) for p in Path("/dev").glob("video*")]
+    return sorted(devices, key=lambda d: int("".join(c for c in d if c.isdigit()) or 0))
+
+
+def open_capture(setting: int | str, width: int, height: int, fps: int):
+    import cv2
+
+    tried = []
+    for candidate in camera_candidates(setting):
+        cap = cv2.VideoCapture(candidate, cv2.CAP_V4L2)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            cap.set(cv2.CAP_PROP_FPS, fps)
+            if cap.read()[0]:
+                return cap
+        cap.release()
+        tried.append(str(candidate))
+    raise RuntimeError(f"no working camera (tried {', '.join(tried) or 'nothing'}); set gaze.camera")
+
+
 class FaceTracker:
-    def __init__(self, model_path: Path, camera: int | str = 0, width: int = 640, height: int = 480, fps: int = 30):
+    def __init__(self, model_path: Path, camera: int | str = "auto", width: int = 640, height: int = 480, fps: int = 30):
         self.model_path = model_path
         self.camera = camera
         self.width = width
@@ -20,18 +48,12 @@ class FaceTracker:
         self._last_ts = 0
 
     def __enter__(self) -> "FaceTracker":
-        import cv2
         from mediapipe.tasks import python as mp_tasks
         from mediapipe.tasks.python import vision
 
         if not self.model_path.exists():
             raise FileNotFoundError(f"face landmarker model missing: {self.model_path} (re-run install.sh)")
-        self._cap = cv2.VideoCapture(self.camera, cv2.CAP_V4L2)
-        if not self._cap.isOpened():
-            raise RuntimeError(f"cannot open camera {self.camera!r}")
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        self._cap.set(cv2.CAP_PROP_FPS, self.fps)
+        self._cap = open_capture(self.camera, self.width, self.height, self.fps)
         options = vision.FaceLandmarkerOptions(
             base_options=mp_tasks.BaseOptions(model_asset_path=str(self.model_path)),
             running_mode=vision.RunningMode.VIDEO,

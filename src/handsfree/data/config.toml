@@ -41,7 +41,7 @@ wake_threshold = 0.5
 prompt = "Open browser. Open Google. Open Claude Code. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid."
 
 [gaze]
-camera = 0               # V4L2 index or a path such as "/dev/video0"
+camera = "auto"          # "auto", a V4L2 index, or a path such as "/dev/video0"
 width = 640
 height = 480
 fps = 30
