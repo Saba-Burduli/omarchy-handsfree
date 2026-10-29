@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import subprocess
 import threading
 import time
@@ -59,6 +60,9 @@ class Daemon:
         self.calibrations = CalibrationStore()
         self._calibrating = threading.Lock()
         self._sleep = time.sleep
+        # Heard text runs on its own thread so the microphone never waits on
+        # a slow action (the voice thread goes straight back to listening).
+        self._heard: queue.Queue = queue.Queue()
         self._server = ControlServer(socket_path(), self.handle_request)
 
     def _make_voice_worker(self, settings: dict[str, Any]):
@@ -66,7 +70,7 @@ class Daemon:
 
         return VoiceWorker(
             settings,
-            on_text=lambda text, push_to_talk: self.handle_text(text, quiet=not push_to_talk),
+            on_text=lambda text, push_to_talk: self._heard.put((text, not push_to_talk)),
             on_listening=lambda on: self._set(listening=on),
             on_error=self._voice_failed,
         )
@@ -76,6 +80,10 @@ class Daemon:
     def run(self) -> None:
         self._server.start()
         self._publish()
+        threading.Thread(target=self._run_heard, name="actions", daemon=True).start()
+        warm_up = getattr(self.desktop, "warm_up", None)
+        if warm_up:
+            threading.Thread(target=warm_up, name="warm-up", daemon=True).start()
         if self._consent().microphone and self.config.section("voice").get("preload", True):
             self.voice.transcriber.preload()  # first command shouldn't wait for model load
         log.info("handsfree ready on %s", socket_path())
@@ -85,7 +93,18 @@ class Daemon:
     def stop(self) -> None:
         self._stopping.set()
 
+    def _run_heard(self) -> None:
+        while True:
+            text, quiet = self._heard.get()
+            if text is None:
+                return
+            try:
+                self.handle_text(text, quiet=quiet)
+            except Exception:
+                log.exception("handling %r failed", text)
+
     def _shutdown(self) -> None:
+        self._heard.put((None, None))
         self.voice.shutdown()
         self.gaze.stop()
         self.close_grid()

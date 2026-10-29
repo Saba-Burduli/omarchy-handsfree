@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import subprocess
 from typing import Any
 
@@ -9,6 +11,8 @@ from . import Monitor
 from .hypr import Hyprland
 from .keys import parse_combo
 from .notify import Notifier
+
+log = logging.getLogger(__name__)
 
 
 def _spawn(args: list[str]) -> None:
@@ -36,6 +40,15 @@ class OmarchyDesktop:
 
             self._input = VirtualInput(int(self.settings.get("scroll_steps", 5)))
         return self._input
+
+    def warm_up(self) -> None:
+        """Create the virtual input devices now: the first one can take seconds
+        to appear, which would otherwise delay the first click or key press."""
+        if os.access("/dev/uinput", os.W_OK):
+            try:
+                self._virtual_input()
+            except Exception as exc:
+                log.warning("virtual input unavailable: %s", exc)
 
     def run_shell(self, command: str) -> None:
         _spawn(["sh", "-c", command])

@@ -141,6 +141,14 @@ class DaemonTest(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertIn("camera", response["error"])
 
+    def test_heard_text_runs_off_the_voice_thread(self):
+        worker = threading.Thread(target=self.daemon._run_heard, daemon=True)
+        worker.start()
+        self.daemon.voice.on_text("open google", True)  # what the voice thread calls
+        self.daemon._heard.put((None, None))
+        worker.join(timeout=2)
+        self.assertEqual(self.actions()[-1], ("open_url", ("https://www.google.com",)))
+
     def test_bad_toggle(self):
         self.assertFalse(self.daemon.handle_request({"cmd": "dictation", "arg": "maybe"})["ok"])
 
