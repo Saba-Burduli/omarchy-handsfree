@@ -49,6 +49,7 @@ class GazeEngine:
         self.filter = PointFilter(float(settings.get("min_cutoff", 0.4)), float(settings.get("beta", 0.001)))
         self._sinks: list[Sink] = []
         self._sent: tuple[float, float] | None = None
+        self._move_failed = False
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -128,7 +129,14 @@ class GazeEngine:
             self.dwell.reset()
             return
         if self._sent is None or math.dist(self._sent, (x, y)) >= 2:
-            self.desktop.move_cursor(x, y)
+            try:
+                self.desktop.move_cursor(x, y)
+            except Exception as exc:  # keep tracking; report the first failure only
+                if not self._move_failed:
+                    log.warning("cannot move the pointer: %s", exc)
+                self._move_failed = True
+            else:
+                self._move_failed = False
             self._sent = (x, y)
         if self.dwell.update(x, y, obs.t):
             self.on_click()

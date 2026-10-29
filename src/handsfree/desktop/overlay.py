@@ -20,6 +20,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 gi.require_foreign("cairo")
 import cairo  # noqa: E402

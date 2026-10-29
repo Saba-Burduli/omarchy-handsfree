@@ -39,9 +39,49 @@ def logical_monitor(data: dict[str, Any]) -> Monitor:
     return Monitor(data["name"], float(data["x"]), float(data["y"]), width, height)
 
 
+def _lua_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def to_lua(args: str) -> str:
+    """Translate a classic dispatcher ("workspace 2") to Hyprland's Lua API.
+
+    Hyprland 0.55+ with a Lua config (Omarchy 4) evaluates `dispatch` as Lua,
+    e.g. hl.dsp.focus({ workspace = "2" }). commands.toml keeps the classic
+    form so it works on both; anything starting with "hl." passes through.
+    """
+    args = args.strip()
+    if args.startswith("hl."):
+        return args
+    name, _, rest = args.partition(" ")
+    rest = rest.strip()
+    if name == "movecursor":
+        x, y = rest.split()
+        return f"hl.dsp.cursor.move({{ x = {int(float(x))}, y = {int(float(y))} }})"
+    if name == "killactive":
+        return "hl.dsp.window.close()"
+    if name == "fullscreen":
+        mode = "maximized" if rest == "1" else "fullscreen"
+        return f'hl.dsp.window.fullscreen({{ mode = "{mode}", action = "toggle" }})'
+    if name == "togglefloating":
+        return 'hl.dsp.window.float({ action = "toggle" })'
+    if name == "workspace":
+        return f"hl.dsp.focus({{ workspace = {_lua_string(rest)} }})"
+    if name == "movetoworkspace":
+        return f"hl.dsp.window.move({{ workspace = {_lua_string(rest)} }})"
+    if name == "movetoworkspacesilent":
+        return f"hl.dsp.window.move({{ workspace = {_lua_string(rest)}, follow = false }})"
+    if name == "movefocus":
+        return f"hl.dsp.focus({{ direction = {_lua_string(rest)} }})"
+    if name == "exec":
+        return f"hl.dsp.exec_cmd({_lua_string(rest)})"
+    raise ValueError(f"no Lua form known for dispatcher {name!r}; write it as hl.dsp...(...) in commands.toml")
+
+
 class Hyprland:
     def __init__(self) -> None:
         self._path: Path | None = None
+        self._lua: bool | None = None
 
     def request(self, command: str) -> str:
         if self._path is None:
@@ -55,10 +95,19 @@ class Hyprland:
                 chunks.append(chunk)
         return b"".join(chunks).decode(errors="replace")
 
+    @property
+    def lua(self) -> bool:
+        """Whether dispatchers must be Lua (probed once with a no-op)."""
+        if self._lua is None:
+            self._lua = self.request("dispatch hl.dsp.no_op()").strip() == "ok"
+            log.info("Hyprland dispatch syntax: %s", "Lua" if self._lua else "classic")
+        return self._lua
+
     def dispatch(self, args: str) -> None:
-        reply = self.request(f"dispatch {args}").strip()
+        command = to_lua(args) if self.lua else args
+        reply = self.request(f"dispatch {command}").strip()
         if reply != "ok":
-            log.warning("hyprctl dispatch %s: %s", args, reply)
+            raise RuntimeError(f"hyprctl dispatch {command}: {reply}")
 
     def monitors(self) -> list[dict[str, Any]]:
         return json.loads(self.request("j/monitors"))

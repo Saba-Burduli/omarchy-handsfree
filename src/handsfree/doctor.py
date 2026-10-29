@@ -22,6 +22,11 @@ class Check:
     required: bool = True
 
 
+def _check(name: str, ok: bool, fail: str, required: bool = True) -> Check:
+    """A check whose hint only matters when it fails."""
+    return Check(name, ok, "" if ok else fail, required)
+
+
 def _module(name: str, extra: str) -> Check:
     found = importlib.util.find_spec(name) is not None
     return Check(f"python module {name}", found, "" if found else f"reinstall with the [{extra}] extra")
@@ -37,14 +42,14 @@ def run_checks(config: Config | None = None) -> list[Check]:
     gaze = config.section("gaze")
     consent = Consent.load()
     checks = [
-        Check("Hyprland session", bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")),
-              "HYPRLAND_INSTANCE_SIGNATURE not set (run inside Hyprland / uwsm)"),
+        _check("Hyprland session", bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")),
+               fail="HYPRLAND_INSTANCE_SIGNATURE not set (run inside Hyprland / uwsm)"),
         _command("wtype", "typing and dictation"),
         _command("notify-send", "feedback notifications"),
         _command("omarchy-launch-browser", "opening sites (or set desktop.url_opener)"),
         _command("uwsm", "launching apps (or set desktop.app_launcher)"),
-        Check("/dev/uinput writable", os.access("/dev/uinput", os.W_OK),
-              "clicks and keys need the udev rule from install.sh (log out and in after installing)"),
+        _check("/dev/uinput writable", os.access("/dev/uinput", os.W_OK),
+               fail="clicks and keys need the udev rule from install.sh (log out and in after installing)"),
         _module("faster_whisper", "voice"),
         _module("sounddevice", "voice"),
         _module("evdev", "input"),
@@ -66,12 +71,12 @@ def run_checks(config: Config | None = None) -> list[Check]:
         overlay_ok, detail = probe.returncode == 0, (probe.stderr.strip().splitlines() or [""])[-1]
     except OSError as exc:
         overlay_ok, detail = False, str(exc)
-    checks.append(Check("overlay Python (PyGObject + cairo)", overlay_ok,
-                        detail or "pacman -S python-gobject python-cairo"))
+    checks.append(_check("overlay Python (PyGObject + cairo)", overlay_ok,
+                         fail=detail or "pacman -S python-gobject python-cairo"))
     videos = sorted(Path("/dev").glob("video*"))
     checks.append(Check("webcam", bool(videos), ", ".join(map(str, videos)) or "no /dev/video* device", required=False))
-    checks.append(Check("microphone consent", consent.microphone, "run handsfree-ctl setup", required=False))
-    checks.append(Check("camera consent", consent.camera, "run handsfree-ctl setup", required=False))
+    checks.append(_check("microphone consent", consent.microphone, fail="run handsfree-ctl setup", required=False))
+    checks.append(_check("camera consent", consent.camera, fail="run handsfree-ctl setup", required=False))
     return checks
 
 

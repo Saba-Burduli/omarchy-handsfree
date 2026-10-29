@@ -11,7 +11,7 @@ from unittest import mock
 
 from handsfree.desktop import Monitor
 from handsfree.desktop import overlay_client
-from handsfree.desktop.hypr import Hyprland, logical_monitor
+from handsfree.desktop.hypr import Hyprland, logical_monitor, to_lua
 from handsfree.desktop.notify import Notifier
 
 MONITORS = [
@@ -23,7 +23,8 @@ MONITORS = [
 class FakeHyprland:
     """Serves Hyprland's request socket protocol: one command per connection."""
 
-    def __init__(self):
+    def __init__(self, lua=False):
+        self.lua = lua  # Hyprland 0.55+ with a Lua config evaluates dispatch as Lua
         self.dir = tempfile.mkdtemp(dir="/tmp")  # AF_UNIX paths must stay short
         self.path = Path(self.dir, "hypr", "sig", ".socket.sock")
         self.path.parent.mkdir(parents=True)
@@ -42,7 +43,13 @@ class FakeHyprland:
             with conn:
                 request = conn.recv(4096).decode()
                 self.requests.append(request)
-                reply = json.dumps(MONITORS) if request == "j/monitors" else "ok"
+                if request == "j/monitors":
+                    reply = json.dumps(MONITORS)
+                elif request.startswith("dispatch "):
+                    is_lua = request.startswith("dispatch hl.")
+                    reply = "ok" if is_lua == self.lua else "error: wrong dispatcher syntax"
+                else:
+                    reply = "ok"
                 conn.sendall(reply.encode())
 
     def close(self):
@@ -61,7 +68,24 @@ class HyprlandTest(unittest.TestCase):
         hypr = Hyprland()
         hypr.dispatch("workspace 2")
         hypr.move_cursor(100.4, 200.6)
-        self.assertEqual(self.fake.requests, ["dispatch workspace 2", "dispatch movecursor 100 201"])
+        self.assertEqual(self.fake.requests[1:], ["dispatch workspace 2", "dispatch movecursor 100 201"])
+        self.assertFalse(hypr.lua)
+
+    def test_lua_hyprland_gets_translated_dispatchers(self):
+        self.fake.lua = True
+        hypr = Hyprland()
+        hypr.dispatch("workspace 2")
+        hypr.move_cursor(100.4, 200.6)
+        self.assertEqual(self.fake.requests, [
+            "dispatch hl.dsp.no_op()",  # probed once
+            'dispatch hl.dsp.focus({ workspace = "2" })',
+            "dispatch hl.dsp.cursor.move({ x = 100, y = 201 })",
+        ])
+
+    def test_failed_dispatch_raises(self):
+        hypr = Hyprland()
+        with self.assertRaises(RuntimeError):
+            hypr.dispatch("hl.dsp.window.close()")  # Lua syntax on classic Hyprland
 
     def test_focused_monitor_is_logical(self):
         # DP-1 is rotated 90 degrees, so its width and height swap.
@@ -97,6 +121,39 @@ def fake_evdev():
             pass
 
     return types.SimpleNamespace(UInput=UInput, ecodes=ecodes), events
+
+
+class ToLuaTest(unittest.TestCase):
+    def test_default_commands_translate(self):
+        cases = {
+            "killactive": "hl.dsp.window.close()",
+            "fullscreen 0": 'hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" })',
+            "togglefloating": 'hl.dsp.window.float({ action = "toggle" })',
+            "workspace e+1": 'hl.dsp.focus({ workspace = "e+1" })',
+            "movetoworkspace 3": 'hl.dsp.window.move({ workspace = "3" })',
+            "movefocus l": 'hl.dsp.focus({ direction = "l" })',
+            "exec kitty": 'hl.dsp.exec_cmd("kitty")',
+            'hl.dsp.window.pin()': "hl.dsp.window.pin()",
+        }
+        for classic, lua in cases.items():
+            self.assertEqual(to_lua(classic), lua)
+
+    def test_every_default_hypr_command_has_a_lua_form(self):
+        import tempfile as tf
+        from handsfree.config import load_commands
+
+        with tf.TemporaryDirectory() as tmp:
+            commands = load_commands(Path(tmp))["command"]
+        for command in commands:
+            if "hypr" in command:
+                to_lua(command["hypr"].replace("{n}", "2"))
+
+    def test_quotes_are_escaped(self):
+        self.assertEqual(to_lua('exec echo "hi"'), 'hl.dsp.exec_cmd("echo \\"hi\\"")')
+
+    def test_unknown_dispatcher(self):
+        with self.assertRaises(ValueError):
+            to_lua("splitratio 0.5")
 
 
 class VirtualInputTest(unittest.TestCase):

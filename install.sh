@@ -160,6 +160,8 @@ elif confirm "Add Super+Alt+V (listen), Super+Shift+Alt+V (continuous), Super+Al
 fi
 
 step "Status indicator"
+# The omarchy CLI needs OMARCHY_PATH, which non-login shells may lack.
+[[ -z ${OMARCHY_PATH:-} && -d /usr/share/omarchy ]] && export OMARCHY_PATH=/usr/share/omarchy
 if command -v omarchy-shell >/dev/null; then
   plugin="$CONFIG/omarchy/plugins/handsfree.status"
   mkdir -p "$plugin"
