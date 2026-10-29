@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import queue
 import threading
 from typing import Any
+
+from .capture import open_input
 
 CHUNK = 1280  # 80 ms at 16 kHz, the frame size openWakeWord expects
 
@@ -24,14 +27,22 @@ class WakeWord:
 
     def wait(self, cancel: threading.Event) -> bool:
         """Block until the wake word is heard (True) or cancel is set (False)."""
-        import sounddevice as sd
+        import numpy as np
 
         model = self._load()
         model.reset()
-        with sd.InputStream(samplerate=16000, channels=1, dtype="int16", blocksize=CHUNK, device=self.device) as stream:
+        blocks: queue.Queue = queue.Queue()
+
+        def callback(indata, _frames, _time, _status) -> None:
+            blocks.put(indata[:, 0].copy())
+
+        with open_input(self.device, 16000, CHUNK, callback):
             while not cancel.is_set():
-                block, _overflowed = stream.read(CHUNK)
-                scores = model.predict(block[:, 0])
+                try:
+                    block = blocks.get(timeout=0.25)
+                except queue.Empty:
+                    continue
+                scores = model.predict((np.clip(block, -1, 1) * 32767).astype(np.int16))
                 if max(scores.values(), default=0.0) >= self.threshold:
                     model.reset()
                     return True

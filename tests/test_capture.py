@@ -54,6 +54,30 @@ class MicrophoneTest(unittest.TestCase):
         self.assertLess(len(audio), 70 * 480)
         self.assertAlmostEqual(float(audio[:480].max()), 0.001, places=5)
 
+    def test_pulse_source_is_captured_with_parec(self):
+        from handsfree.audio import capture
+
+        script = (
+            "import sys, struct\n"
+            "levels = [0.001] * 40 + [0.2] * 20 + [0.001] * 30\n"
+            "for level in levels:\n"
+            "    sys.stdout.buffer.write(struct.pack('<480f', *([level] * 480)))\n"
+            "sys.stdout.flush()\n"
+        )
+        seen = []
+        real_popen = capture.subprocess.Popen
+
+        def fake_popen(args, **kwargs):
+            seen.append(args)
+            return real_popen([sys.executable, "-c", script], **kwargs)
+
+        cancel, finish = threading.Event(), threading.Event()
+        with mock.patch.object(capture.subprocess, "Popen", fake_popen):
+            audio = capture.Microphone(device="pulse:hf_demo_mic").record_utterance(EndpointConfig(), cancel, finish)
+        self.assertIn("--device=hf_demo_mic", seen[0])
+        self.assertIsNotNone(audio)
+        self.assertGreaterEqual(len(audio), 30 * 480)
+
     def test_silence_times_out(self):
         self.assertIsNone(self.record([0.001] * 200, start_timeout_ms=900))
 

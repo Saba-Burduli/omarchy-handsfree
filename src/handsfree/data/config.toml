@@ -24,7 +24,9 @@ allow_download = false
 device = "auto"          # auto | cpu | cuda
 compute_type = "int8"    # int8 suits CPUs; CUDA switches to float16
 language = "en"
-input_device = ""        # sounddevice name or index; empty = system default
+# Empty = system default. A sounddevice name/index, or "pulse:<source>" to pin
+# one PipeWire/Pulse source by name (see `pactl list short sources`).
+input_device = ""
 sample_rate = 16000
 energy_threshold = 0.012 # raise it in a noisy room
 silence_ms = 700         # pause that ends a command
