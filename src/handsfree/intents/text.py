@@ -12,7 +12,7 @@ except ImportError:  # optional; difflib is close enough for short phrases
     _fuzz = None
 
 _EDGE_PUNCT = re.compile(r"^[^\w']+|[^\w']+$")
-_FILLERS = {"please", "okay", "ok", "um", "uh", "hey", "so", "and", "now"}
+_FILLERS = {"please", "okay", "ok", "um", "uh", "ugh", "oh", "hey", "so", "and", "now", "alright"}
 
 NUMBER_WORDS = {
     "zero": 0, "one": 1, "won": 1, "two": 2, "to": 2, "too": 2, "three": 3, "four": 4,

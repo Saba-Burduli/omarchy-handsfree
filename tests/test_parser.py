@@ -60,6 +60,7 @@ class ParserTest(unittest.TestCase):
 
     def test_fillers_ignored(self):
         self.assertEqual(self.action("Okay, please open browser please")[1], "omarchy-launch-browser")
+        self.assertEqual(self.action("Ugh, open terminal.")[1], "omarchy-launch-terminal")
 
     def test_fuzzy_phrase(self):
         intent = self.parser.parse("open browsers")
