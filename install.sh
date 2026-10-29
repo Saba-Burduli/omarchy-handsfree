@@ -42,6 +42,8 @@ confirm() {
   [[ -z $answer || $answer =~ ^[Yy] ]]
 }
 fill() { sed "s|@BIN@|$BIN|g" "$1"; }
+# sudo can ask for a password only with a terminal; over a plain pipe it must already be cached.
+can_sudo() { [[ -t 0 ]] || sudo -n true 2>/dev/null; }
 
 if ! command -v pacman >/dev/null; then
   echo "This installer is for Arch-based Omarchy (pacman not found)." >&2
@@ -53,13 +55,20 @@ if [[ $EUID -eq 0 ]]; then
 fi
 
 step "System packages"
-packages=(uv wtype libnotify portaudio python-gobject python-cairo gtk4 gtk4-layer-shell base-devel linux-api-headers curl)
+export PATH="$HOME/.local/bin:$PATH"
+packages=(wtype libnotify portaudio python-gobject python-cairo gtk4 gtk4-layer-shell base-devel linux-api-headers curl)
+command -v uv >/dev/null || packages+=(uv)  # a per-user uv works too
 missing=()
 for pkg in "${packages[@]}"; do
   pacman -Q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
 done
 if ((${#missing[@]})); then
   note "Installing: ${missing[*]}"
+  if ! can_sudo; then
+    echo "Missing packages need sudo. Run this, then re-run ./install.sh:" >&2
+    echo "  sudo pacman -S --needed ${missing[*]}" >&2
+    exit 1
+  fi
   sudo pacman -S --needed --noconfirm "${missing[@]}"
 else
   note "All present."
@@ -107,6 +116,9 @@ step "Virtual mouse and keyboard (uinput)"
 rule=/etc/udev/rules.d/60-handsfree-uinput.rules
 if [[ -f $rule ]] && cmp -s "$REPO/omarchy/60-handsfree-uinput.rules" "$rule"; then
   note "udev rule already installed."
+elif ! can_sudo; then
+  note "Skipped (needs sudo). For clicks and key presses, run in a terminal:"
+  note "  sudo install -Dm644 $REPO/omarchy/60-handsfree-uinput.rules $rule && sudo udevadm control --reload && sudo udevadm trigger /dev/uinput"
 elif confirm "Install a udev rule so voice and gaze can click and press keys (needs sudo)?"; then
   sudo install -Dm644 "$REPO/omarchy/60-handsfree-uinput.rules" "$rule"
   echo uinput | sudo tee /etc/modules-load.d/handsfree-uinput.conf >/dev/null
