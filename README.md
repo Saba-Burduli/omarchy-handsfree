@@ -2,11 +2,17 @@
 
 Control [Omarchy](https://omarchy.org) with your voice and your eyes.
 
+![Voice control demo on Omarchy 4: open Google, type, search, open a terminal, switch workspaces, mouse grid](docs/demo.gif)
+
+▶ [Full 49-second demo with sound](docs/demo.mp4): every command is spoken; nothing is typed or clicked by hand.
+
 - Say **"open browser"**, **"open Google"**, **"open Claude Code"**, **"search for arch wiki hyprland"**, **"workspace two"**, **"type hello world"**, or turn on dictation and talk.
 - Turn on eye tracking and the pointer follows your gaze. Click by saying **"click"**, by holding your gaze still, or by a long deliberate blink.
 - For small buttons, say **"grid"**, then a number, to zoom in on the right spot.
 
 Everything runs **offline** on your machine (Whisper for speech, MediaPipe for eyes). No audio or video leaves your computer. The microphone and camera are off until you allow them, and a bar indicator shows when either one is in use.
+
+Tested on Omarchy 4 (Hyprland 0.56 with its Lua config, the Quickshell bar) in [Try Omarchy](https://tryomarchy.dev) on an Apple Silicon Mac, with the Mac's microphone and camera passed through.
 
 ## Install
 
@@ -101,9 +107,10 @@ Tips: face the camera with even light from the front, avoid glare on glasses, an
 model = "small.en"        # more accurate, slower; "tiny.en" is fastest (re-run install.sh)
 energy_threshold = 0.02   # raise it in a noisy room
 wake_word = "hey_jarvis"  # continuous mode waits for this (needs --with-wake)
+input_device = "pulse:alsa_input.usb-Blue_Yeti-00.analog-stereo"  # a specific mic, by PipeWire name
 
 [gaze]
-camera = "/dev/video2"
+camera = "/dev/video2"     # default "auto" finds the first working camera
 calibration_points = 16   # 4x4 grid, more accurate
 ```
 
@@ -123,6 +130,8 @@ handsfree --dry-run -v               # run in a terminal, log actions instead of
 ```
 
 - **"Not understood"**: check the log for what Whisper heard, and add that phrase to your commands.
+- **Random commands or "not understood" in continuous mode**: continuous listening hears everything, including a TV or people talking. Use push-to-talk (`Super + Alt + V`) or a wake word in a noisy room.
+- **Microphone picks the wrong device**: set `input_device = "pulse:<name>"` using a name from `pactl list short sources`.
 - **Clicks or keys do nothing**: check that `/dev/uinput writable` is `ok` in `doctor`; log out and back in after installing.
 - **No overlay during calibration**: `doctor` must show `gtk4-layer-shell` and the overlay Python as `ok`.
 - **Commands are slow**: use `model = "tiny.en"` (then re-run `./install.sh` to download it), or a GPU with CUDA (`device = "auto"` picks it up).

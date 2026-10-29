@@ -96,10 +96,45 @@ standard or recommended option, with the reason.
   Wayland, the GTK layer-shell overlay, and the QML bar widget. These need an
   Omarchy machine; `handsfree-ctl doctor` checks the environment first.
 
+## Tested on real Omarchy (Try Omarchy VM, 2026-10-30)
+Omarchy 4.0 (quattro), Hyprland 0.56.2 with Lua config, aarch64, Mac mic and
+camera passed through. Driven over SSH; screenshots with grim.
+- Worked: install.sh, the systemd service, voice through the real microphone
+  ("Workspace two" spoken by the Mac was heard and executed), Google, typing via
+  wtype, key combos and clicks via uinput, workspaces, fullscreen, grid overlay
+  (GTK layer shell), calibration overlay and flow, bar widget (validated with
+  `omarchy plugin validate`), camera + MediaPipe at 21 fps with a face in 61/63
+  frames.
+- Bugs found and fixed there:
+  - Hyprland's Lua config evaluates `hyprctl dispatch` as Lua, so classic
+    dispatchers failed. `desktop/hypr.py` probes with `hl.dsp.no_op()` and
+    translates (`workspace 2` -> `hl.dsp.focus({ workspace = "2" })`).
+  - Camera was assumed to be /dev/video0; Try Omarchy uses /dev/video42.
+    `gaze.camera = "auto"` now tries each node.
+  - Actions ran on the voice thread, so a slow action made the next command
+    go unheard; the first uinput use took 4 s. Actions now run on their own
+    thread and virtual input is created at startup.
+  - Try Omarchy's audio bridge routes ALSA-default capture to the Mac mic
+    whatever the default source is; `input_device = "pulse:<source>"` pins a
+    named source via parec.
+  - Whisper heard "Omarchy" as "I'm Marky"; added to its prompt.
+- Demo: recorded with wf-recorder in the VM. Commands were synthesized with
+  macOS `say` and fed through a virtual PipeWire mic, because the room's TV
+  was audible on the real mic (a continuous-listening take had to be thrown
+  away). All 12 commands in docs/demo.mp4 were understood first time.
+- Product lesson: continuous listening without a wake word is unusable with
+  background speech; push-to-talk or a wake word should be the advice.
+- Not verified: calibration accuracy (needs a person following the dots).
+
+## Plugin distribution
+Omarchy has no central plugin store. Third-party shell plugins are installed
+from any git repo with `omarchy plugin add <git-url> --enable` (it validates
+the manifest, never runs code or asks for sudo). Our bar widget passes
+`omarchy plugin validate`.
+
 ## Known limitations
 - Gaze maps to the monitor that was focused when tracking started.
 - Webcam gaze is roughly 100-200 px accurate; the grid exists for small targets.
 - Omarchy script names (`omarchy-launch-browser`, `xdg-terminal-exec`) can
   change between releases; they live in `commands.toml`, not in code.
-- Nothing here has been run on real Omarchy hardware yet (this was built on
-  macOS); see README "Verifying on Omarchy".
+- Tested in the Try Omarchy VM (see above), not yet on bare-metal hardware.
