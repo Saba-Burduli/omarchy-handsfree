@@ -40,7 +40,7 @@ preload = true           # load Whisper at startup (if the mic is allowed) so th
 wake_word = ""
 wake_threshold = 0.5
 # Primes Whisper with the words you use most.
-prompt = "Omarchy. Open browser. Open Google. Open Claude Code. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid."
+prompt = "Omarchy, Hyprland, Neovim, btop, fastfetch. Open browser. Open Google. Open Claude Code. Open Neovim. Run fastfetch. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid. Next theme."
 
 [gaze]
 camera = "auto"          # "auto", a V4L2 index, or a path such as "/dev/video0"
