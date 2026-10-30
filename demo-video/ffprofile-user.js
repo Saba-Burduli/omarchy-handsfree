@@ -1,0 +1,20 @@
+// Clean English Firefox profile for recordings: nothing personal, no first-run noise.
+user_pref("intl.accept_languages", "en-US, en");
+user_pref("intl.locale.requested", "en-US");
+user_pref("browser.startup.page", 0);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("startup.homepage_welcome_url", "");
+user_pref("startup.homepage_welcome_url.additional", "");
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+user_pref("datareporting.policy.firstRunURL", "");
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("browser.sessionstore.resume_from_crash", false);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.urlbar.tipShownCount.searchTip_onboard", 999);
+user_pref("browser.urlbar.tipShownCount.searchTip_redirect", 999);
+user_pref("browser.toolbars.bookmarks.visibility", "never");
+user_pref("browser.newtabpage.enabled", false);
+user_pref("browser.tabs.firefox-view", false);
+user_pref("browser.translations.automaticallyPopup", false);
+user_pref("signon.rememberSignons", false);

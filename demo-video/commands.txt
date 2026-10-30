@@ -1,0 +1,21 @@
+# Spoken commands, in order: clip number | exact words | extra seconds to hold after the result
+# Clips: voice/NN.wav (your recordings) win over voice/placeholder/NN.wav (TTS for testing).
+01|open activity monitor|0.5
+02|next theme|1.5
+03|close window|0
+04|open terminal|0
+05|run fastfetch|1
+06|open neovim|0.5
+07|close window|0
+08|close window|0
+09|open google|1
+10|type omarchy themes|0
+11|press enter|1
+12|scroll down|0
+13|scroll to the bottom|0
+14|scroll to the top|0
+15|show grid|0.5
+16|five|0.5
+17|close grid|0
+18|workspace two|0
+19|workspace one|0

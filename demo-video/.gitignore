@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+.env
+
+# Ignore the output video from Git but not videos you import into src/.
+out
+
+# Recordings and generated edit data (remake with remote-take.sh / record.sh + scripts/prep.mjs)
+takes
+public/take
+public/music.mp3
+music.mp3
+src/take.json
+voice/*.wav
+voice/placeholder
+ffprofile
