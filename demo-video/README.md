@@ -8,6 +8,8 @@ play clips into a virtual mic and record the screen; nothing is triggered direct
 
 `commands.txt` lists the commands in order (`NN|words|extra hold seconds`).
 Record each one as `voice/NN.wav` (`voice/01.wav`, `voice/02.wav`, ...).
+`scripts/record-voice.sh` does this on a Mac: it shows each line, records until
+you press Enter, trims the silence and plays it back.
 Until those exist, `scripts/placeholder-voice.sh` makes test clips with macOS `say`
 in `voice/placeholder/`.
 
