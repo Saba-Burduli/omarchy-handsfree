@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import Config, socket_path, state_file
 from .consent import Consent
+from .demolog import DemoLog
 from .desktop import Desktop
 from .gaze.calibrate import CalibrationError, CalibrationStore, run_calibration
 from .gaze.engine import GazeEngine
@@ -64,6 +65,7 @@ class Daemon:
         # a slow action (the voice thread goes straight back to listening).
         self._heard: queue.Queue = queue.Queue()
         self._server = ControlServer(socket_path(), self.handle_request)
+        self.demo_log = DemoLog.from_env()
 
     def _make_voice_worker(self, settings: dict[str, Any]):
         from .audio.worker import VoiceWorker
@@ -229,7 +231,11 @@ class Daemon:
         intent = self.parser.parse(text)
         if self.state["dictation"] and not (intent and intent.exact and intent.command.get("dictation")):
             return self._dictate(text)
+        demo = self.demo_log
+        before, started = (demo.snapshot(), time.time()) if demo else (None, 0.0)
         if intent is None:
+            if demo:
+                demo.record(text, "not understood", False, before, started)
             if not quiet:
                 self._notify("Not understood", f"\u201c{text}\u201d")
             return f"not understood: {text}"
@@ -237,8 +243,13 @@ class Daemon:
             result = self.executor.execute(intent)
         except Exception as exc:
             log.exception("command failed: %s", text)
+            if demo:
+                demo.record(text, f"failed: {exc}", False, before, started)
             self._notify(f"Failed: \u201c{text}\u201d", str(exc))
             return f"failed: {exc}"
+        if demo:
+            launches = any(k in intent.command for k in ("run", "url", "app"))
+            demo.record(text, result, True, before, started, launches=launches)
         if "mouse" in intent.command and self._grid_rect is not None:
             self.close_grid()  # after the click, so the pointer stayed on the cell
         log.info("-> %s", result)
