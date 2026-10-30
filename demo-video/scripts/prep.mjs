@@ -99,7 +99,8 @@ const steps = clips.map((c, i) => {
   return {
     n: c.n,
     words: c.words,
-    heard: (entry?.heard ?? "").replace(/[.!?]+$/, ""),
+    // "Type. Omarchy themes." reads better on screen as one phrase.
+    heard: (entry?.heard ?? "").replace(/[.!?]+$/, "").replace(/[.!?]\s+/g, " "),
     action: entry?.action ?? null,
     ok: Boolean(entry?.ok),
     speechStart: c.start + offset,

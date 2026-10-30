@@ -4,9 +4,9 @@ export const config = {
   // The first thing on screen, before any text.
   hook: "02",
   // Clips in the order they play after the intro (the hook isn't repeated).
-  order: ["04", "05", "06", "09", "10", "11", "12", "13", "14", "15", "16", "18", "19"],
+  order: ["04", "05", "06", "09", "10", "11", "13", "14", "15", "16", "18", "19"],
   // Montage clips: the command and a shorter look at the result.
-  fast: ["12", "13", "14", "16", "18", "19"],
+  fast: ["13", "14", "16", "18", "19"],
   // Extra seconds on a result worth looking at.
   hold: { "02": 1.4, "05": 1.2, "06": 0.5, "09": 0.4, "11": 0.6, "15": 0.4 } as Record<string, number>,
   // Where a section starts: a chip on screen and a narrator line (narration.json)
@@ -14,7 +14,7 @@ export const config = {
   sections: {
     "04": { label: "Apps", vo: "apps" },
     "09": { label: "The web", vo: "web" },
-    "12": { label: "Hands-free, everything", vo: "more" },
+    "13": { label: "Hands-free, everything", vo: "more" },
   } as Record<string, { label: string; vo: string }>,
   // Intro cards, timed (seconds) to the words of narration "intro".
   intro: {

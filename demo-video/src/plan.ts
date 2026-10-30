@@ -90,8 +90,10 @@ function makeShot(n: string, kind: Kind, from: number): Shot {
 // Make room for a narrator line at the end of a shot by holding its result
 // longer. The screen stays as it is until the next command's result appears,
 // so the extra footage is real, just quiet.
-function stretchFor(shot: Shot, seconds: number, nextStep: Step) {
-  const room = sec(nextStep.visible! - 0.2 - shot.action.src);
+function stretchFor(shot: Shot, seconds: number) {
+  // Only up to the next recorded command, even if the edit skips it.
+  const nextStep = take.steps[take.steps.findIndex((s) => s.n === shot.n) + 1];
+  const room = sec((nextStep?.visible ?? Infinity) - 0.2 - shot.action.src);
   const want = sec(seconds);
   const dur = Math.max(shot.action.dur, Math.min(want, room));
   shot.action.dur = dur;
@@ -129,7 +131,7 @@ function build() {
       const prev = shots[shots.length - 1];
       const len = voLen(section.vo);
       // A beat on the result first, then the line, ending just before the cut.
-      stretchFor(prev, 0.6 + len + 0.35, byN.get(n)!);
+      stretchFor(prev, 0.6 + len + 0.35);
       const at = Math.max(prev.action.from + sec(0.6), prev.end - sec(len + 0.3));
       voice.push({ src: `vo/${section.vo}.mp3`, from: at, volume: 1 });
       chips.push({ text: section.label, from: at });
