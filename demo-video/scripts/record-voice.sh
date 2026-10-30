@@ -7,6 +7,8 @@
 #   ./scripts/record-voice.sh 05 12           redo just these commands
 #   ./scripts/record-voice.sh narration intro redo one narrator line
 #   ./scripts/record-voice.sh --reprocess     re-clean every raw take (after tuning the filters)
+#   ./scripts/record-voice.sh --guided 10 13  hands-off: the Mac reads each line aloud, beeps,
+#                                             records a few seconds, beeps again (no keys to press)
 #
 # Raw takes are kept in voice/raw/ so they can be re-cleaned later.
 set -euo pipefail
@@ -62,6 +64,8 @@ if [ "${1:-}" = --reprocess ]; then
   exit 0
 fi
 
+guided=0
+if [ "${1:-}" = --guided ]; then guided=1; shift; fi
 kind=command
 if [ "${1:-}" = narration ]; then kind=narration; shift; fi
 
@@ -80,6 +84,29 @@ while IFS='|' read -r id text; do
   [ -n "$id" ] || continue
   if [ $# -gt 0 ]; then [[ " $* " == *" $id "* ]] || continue
   elif [ -f "$(out_for $kind "$id")" ] && [ -f "voice/raw/$kind-$id.wav" ]; then continue
+  fi
+  if [ $guided = 1 ]; then
+    raw="voice/raw/$kind-$id.wav"
+    words=$(wc -w <<< "$text")
+    secs=$(awk -v w="$words" -v k=$kind 'BEGIN { print (k == "narration") ? w * 0.5 + 2 : 4 }')
+    for try in 1 2 3; do
+      echo "$id  $text  (${secs}s)"
+      say "After the beep, say: $text"
+      # The mic takes a moment to open: start it first, so the beep means it's already listening.
+      ffmpeg -loglevel error -y -f avfoundation -i "$mic" -t "$(awk -v s="$secs" 'BEGIN { print s + 0.8 }')" -ac 1 -ar 48000 "$raw" < /dev/null &
+      sleep 0.8
+      afplay /System/Library/Sounds/Tink.aiff
+      wait $!
+      afplay /System/Library/Sounds/Pop.aiff
+      # Drop the lead-in and the beep itself (the mic hears the speaker).
+      ffmpeg -loglevel error -y -ss 0.85 -i "$raw" "$raw.cut.wav" && mv "$raw.cut.wav" "$raw"
+      peak=$(ffmpeg -i "$raw" -af volumedetect -f null - 2>&1 | sed -n 's/.*max_volume: \(-*[0-9.]*\) dB/\1/p')
+      if awk -v p="${peak:--99}" 'BEGIN { exit !(p < -40) }'; then
+        echo "   almost silent (peak ${peak} dB)"; say "I didn't hear you. Once more."; continue
+      fi
+      finish $kind "$id"; echo "   saved $(out_for $kind "$id")"; break
+    done
+    continue
   fi
   while true; do
     printf '\n\033[2m%s\033[0m  \033[1m%s\033[0m\n   Enter to start... ' "$id" "$text"
