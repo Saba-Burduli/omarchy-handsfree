@@ -8,6 +8,7 @@
 #   {text}  any words              {n}    a number ("two" or "2")
 #   {site}  a name from [sites]    {app}  an installed app (.desktop entry)
 #   {key}   a key combo ("control l", "enter")
+#   {command}  a shell command, lowercased ("run fastfetch")
 #
 # Each command has exactly one action:
 #   run       shell command; slot values are shell-quoted
@@ -47,6 +48,24 @@ run = "omarchy-launch-terminal claude"
 [[command]]
 say = ["open terminal", "open a terminal", "new terminal"]
 run = "omarchy-launch-terminal"
+
+[[command]]
+say = ["open neovim", "open vim", "open nvim", "open editor", "open the editor"]
+run = "omarchy-launch-editor"
+
+[[command]]
+say = ["open activity monitor", "open task manager", "open system monitor", "open btop", "show processes"]
+run = "omarchy-launch-or-focus-tui btop"
+
+# -- Themes -------------------------------------------------------------------
+
+[[command]]
+say = ["next theme", "change theme", "change the theme", "switch theme", "new theme"]
+run = '''cur=$(omarchy-theme-current); next=$(omarchy-theme-list | awk -v c="$cur" 'f { print; exit } $0 == c { f = 1 }'); omarchy-theme-set "${next:-$(omarchy-theme-list | head -n 1)}"'''
+
+[[command]]
+say = ["theme {text}", "switch to {text} theme", "use {text} theme", "set theme {text}", "change theme to {text}"]
+run = '''omarchy-theme-set "$(omarchy-theme-list | grep -ix -- {text} || omarchy-theme-list | grep -i -m 1 -- {text})"'''
 
 [[command]]
 say = ["open {site}", "go to {site}", "show me {site}"]
@@ -121,6 +140,11 @@ type = "{text}"
 [[command]]
 say = ["press {key}", "hit {key}"]
 key = "{key}"
+
+# Types the command into the focused window (a terminal) and presses Enter.
+[[command]]
+say = ["run {command}", "execute {command}"]
+type = "{command}\n"
 
 [[command]]
 say = ["new line", "press enter"]
@@ -200,6 +224,14 @@ mouse = "scroll_down"
 [[command]]
 say = ["scroll up", "page up"]
 mouse = "scroll_up"
+
+[[command]]
+say = ["scroll to bottom", "scroll to the bottom", "go to bottom", "go to the bottom"]
+key = "end"
+
+[[command]]
+say = ["scroll to top", "scroll to the top", "go to top", "go to the top"]
+key = "home"
 
 [[command]]
 say = ["scroll left"]

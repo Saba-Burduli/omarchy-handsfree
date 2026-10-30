@@ -129,5 +129,8 @@ class Parser:
             return (str(number), 100.0) if number is not None else None
         if name == "key":
             return spoken, 100.0
+        if name == "command":  # Whisper capitalizes and punctuates; shells don't
+            value = " ".join(raw).rstrip(_TRAILING_PUNCT).lower()
+            return (value, 100.0) if value else None
         value = " ".join(raw).rstrip(_TRAILING_PUNCT)
         return (value, 100.0) if value else None

@@ -53,12 +53,15 @@ These keys don't clash with Omarchy's defaults. Omarchy's own dictation (`Super 
 | Say | Does |
 | --- | --- |
 | open browser · open terminal · open claude code | Omarchy launchers |
+| open neovim · open activity monitor (btop) | Omarchy's editor and system monitor |
+| next theme · switch to nord theme | Omarchy themes |
+| run *fastfetch* | types a command in the focused terminal and presses Enter |
 | open google / youtube / github / claude / gmail / arch wiki | opens the site |
 | open *any app* (firefox, obsidian, files, ...) | launches it from its .desktop entry |
 | search for *...* · search youtube for *...* | web search |
 | type *...* · press *control l* · new line | typing and keys |
 | undo · copy · paste · select all · save · new tab · close tab · go back · reload | common shortcuts |
-| click · double click · right click · scroll down · hold / release | mouse at the pointer |
+| click · double click · right click · scroll up / down / left / right · scroll to top / bottom · hold click / release | mouse and scrolling at the pointer |
 | close window · fullscreen · workspace *three* · move to workspace *two* · focus left | Hyprland |
 | start dictation / stop dictation | type everything you say |
 | start eye tracking · calibrate · grid · *five* · close grid | eyes |

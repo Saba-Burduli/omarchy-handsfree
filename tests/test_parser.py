@@ -76,6 +76,21 @@ class ParserTest(unittest.TestCase):
         intent = self.parser.parse("Seven.")
         self.assertEqual((intent.command["internal"], intent.slots["n"]), ("grid_pick", "7"))
 
+    def test_omarchy_apps_and_themes(self):
+        self.assertEqual(self.action("Open Neovim.")[1], "omarchy-launch-editor")
+        self.assertEqual(self.action("Open activity monitor.")[1], "omarchy-launch-or-focus-tui btop")
+        self.assertIn("omarchy-theme-set", self.action("Next theme.")[1])
+        kind, template, slots = self.action("Switch to Rose Pine theme.")
+        self.assertEqual(slots["text"], "Rose Pine")
+
+    def test_run_types_a_lowercased_command_and_enter(self):
+        kind, template, slots = self.action("Run Fastfetch.")
+        self.assertEqual((kind, template, slots["command"]), ("type", "{command}\n", "fastfetch"))
+
+    def test_scroll_to_ends(self):
+        self.assertEqual(self.action("Scroll to the bottom.")[:2], ("key", "end"))
+        self.assertEqual(self.action("Go to top")[:2], ("key", "home"))
+
     def test_nonsense(self):
         self.assertIsNone(self.parser.parse("the quick brown fox"))
         self.assertIsNone(self.parser.parse("..."))
