@@ -39,6 +39,9 @@ preload = true           # load Whisper at startup (if the mic is allowed) so th
 # Empty = every sentence you say is treated as a command.
 wake_word = ""
 wake_threshold = 0.5
+# Words Whisper reliably gets wrong, fixed before matching (whole words,
+# any case). It often drops the O of Omarchy.
+corrections = { "o marchy" = "Omarchy", "marchy" = "Omarchy", "omarchi" = "Omarchy", "neo vim" = "Neovim", "fast fetch" = "fastfetch" }
 # Primes Whisper with the words you use most.
 prompt = "Omarchy, Hyprland, Neovim, btop, fastfetch. Open browser. Open Google. Open Claude Code. Open Neovim. Run fastfetch. Search for. Type. Click. Right click. Scroll down. Workspace two. Show grid. Next theme."
 

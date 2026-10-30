@@ -5,6 +5,7 @@ from pathlib import Path
 from handsfree.config import load_commands
 from handsfree.intents.apps import AppEntry, AppIndex
 from handsfree.intents.parser import Parser
+from handsfree.intents.text import correct
 
 APPS = AppIndex([
     AppEntry("firefox.desktop", "Firefox", ("web", "browser")),
@@ -98,3 +99,17 @@ class ParserTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CorrectTest(unittest.TestCase):
+    FIXES = {"o marchy": "Omarchy", "marchy": "Omarchy", "neo vim": "Neovim"}
+
+    def test_whole_words_any_case(self):
+        self.assertEqual(correct("type MARCHY themes", self.FIXES), "type Omarchy themes")
+        self.assertEqual(correct("open neo  vim", self.FIXES), "open Neovim")
+
+    def test_longer_key_wins(self):
+        self.assertEqual(correct("o marchy rocks", self.FIXES), "Omarchy rocks")
+
+    def test_leaves_other_words_alone(self):
+        self.assertEqual(correct("marchyland omarchy", self.FIXES), "marchyland omarchy")

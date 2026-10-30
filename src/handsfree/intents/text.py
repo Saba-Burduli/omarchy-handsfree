@@ -28,6 +28,15 @@ class Tokens:
     norm: list[str]  # lowercase, edge punctuation stripped, for matching
 
 
+def correct(text: str, corrections: dict[str, str]) -> str:
+    """Fix words speech recognition reliably gets wrong ("Marchy" -> "Omarchy").
+    Keys match whole words, case-insensitively; longer keys win."""
+    for wrong in sorted(corrections, key=len, reverse=True):
+        pattern = r"(?<![\w'])" + r"\s+".join(map(re.escape, wrong.split())) + r"(?![\w'])"
+        text = re.sub(pattern, corrections[wrong], text, flags=re.IGNORECASE)
+    return text
+
+
 def normalize(text: str) -> str:
     return " ".join(tokenize(text).norm)
 

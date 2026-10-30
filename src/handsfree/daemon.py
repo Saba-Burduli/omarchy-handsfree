@@ -21,6 +21,7 @@ from .gaze.grid import Rect, around, center, split
 from .intents.actions import Executor
 from .intents.apps import LazyAppIndex
 from .intents.parser import Parser
+from .intents.text import correct
 from .ipc import ControlServer
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class Daemon:
             apps=LazyAppIndex(),
             threshold=float(voice.get("fuzzy_threshold", 82)),
         )
+        self.corrections = dict(voice.get("corrections", {}))
         self.executor = Executor(desktop, self.internal)
         self.voice = self._make_voice_worker(voice)
         self.gaze = GazeEngine(config.section("gaze"), desktop, on_error=self._gaze_failed, on_click=self._gaze_click)
@@ -227,6 +229,10 @@ class Daemon:
         if not text:
             return "nothing heard"
         log.info("heard: %s", text)
+        fixed = correct(text, self.corrections)
+        if fixed != text:
+            log.info("corrected: %s", fixed)
+            text = fixed
         self._set(last=text)
         intent = self.parser.parse(text)
         if self.state["dictation"] and not (intent and intent.exact and intent.command.get("dictation")):

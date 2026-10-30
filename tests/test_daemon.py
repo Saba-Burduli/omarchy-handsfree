@@ -51,6 +51,10 @@ class DaemonTest(unittest.TestCase):
         self.say("Open Google.")
         self.assertEqual(self.actions()[-1], ("open_url", ("https://www.google.com",)))
 
+    def test_misheard_omarchy_is_corrected(self):
+        self.say("Type. Marchy themes.")
+        self.assertEqual(self.actions()[-1], ("type_text", ("Omarchy themes",)))
+
     def test_unknown_phrase_notifies(self):
         self.assertIn("not understood", self.say("blah blah blah")["message"])
 
