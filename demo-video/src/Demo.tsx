@@ -2,16 +2,26 @@ import { Audio } from "@remotion/media";
 import { AbsoluteFill, interpolate, Sequence, spring, staticFile, useCurrentFrame } from "remotion";
 import { theme } from "./config";
 import { Footage, shotAt } from "./Footage";
-import { Chip, inter, Outro, Pill, Title } from "./Overlays";
-import { FPS, hasMusic, OUTRO, plan, TITLE } from "./plan";
+import { Chip, inter, Intro, Outro, Pill } from "./Overlays";
+import { FPS, hasMusic, OUTRO, plan, speaking } from "./plan";
 
-// Music sits under the voice and dips while a command is spoken.
+// Music sits under the voices and dips whenever someone is talking.
 function musicVolume(frame: number) {
-  const shot = shotAt(frame);
-  const speaking = shot && frame < shot.action.from + 6;
-  const fadeOut = interpolate(frame, [plan.total - 60, plan.total], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  return (speaking ? 0.16 : 0.32) * fadeOut;
+  const fade = interpolate(frame, [0, 20, plan.total - 90, plan.total], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (speaking(frame) ? 0.07 : 0.2) * fade;
 }
+
+// Narrator lines and sound effects, placed by the plan.
+const Sound: React.FC = () => (
+  <>
+    {hasMusic && <Audio src={staticFile("music.mp3")} volume={musicVolume} />}
+    {[...plan.voice, ...plan.sfx].map((cue, i) => (
+      <Sequence key={i} from={cue.from} layout="none">
+        <Audio src={staticFile(cue.src)} volume={cue.volume} />
+      </Sequence>
+    ))}
+  </>
+);
 
 const Overlays: React.FC<{ pillSize: number; chipSize: number; pillBottom: number; chipTop: number }> = ({
   pillSize,
@@ -28,29 +38,33 @@ const Overlays: React.FC<{ pillSize: number; chipSize: number; pillBottom: numbe
           <Pill key={shot.from} shot={shot} size={pillSize} />
         </AbsoluteFill>
       )}
-      {plan.shots
-        .filter((s) => s.section)
-        .map((s) => (
-          <div key={s.n} style={{ position: "absolute", top: chipTop, left: chipSize * 2.6 }}>
-            <Chip text={s.section!} from={s.from} size={chipSize} />
-          </div>
-        ))}
+      {plan.chips.map((c) => (
+        <div key={c.from} style={{ position: "absolute", top: chipTop, left: chipSize * 2.6 }}>
+          <Chip text={c.text} from={c.from} size={chipSize} />
+        </div>
+      ))}
     </>
   );
 };
+
+const Cards: React.FC<{ introSize: number; outroSize: number }> = ({ introSize, outroSize }) => (
+  <>
+    <Sequence from={plan.introFrom} durationInFrames={plan.introDur}>
+      <Intro size={introSize} voAt={plan.voice[0].from - plan.introFrom} duration={plan.introDur} />
+    </Sequence>
+    <Sequence from={plan.outroFrom} durationInFrames={OUTRO}>
+      <Outro size={outroSize} />
+    </Sequence>
+  </>
+);
 
 export const Wide: React.FC = () => (
   <AbsoluteFill style={{ background: theme.bg }}>
     <Footage shots={plan.shots} width={1920} height={1080} />
     <AbsoluteFill style={{ background: "linear-gradient(to top, rgba(0,0,0,0.45), transparent 22%)" }} />
-    <Overlays pillSize={38} chipSize={28} pillBottom={56} chipTop={52} />
-    <Sequence from={plan.titleFrom} durationInFrames={TITLE}>
-      <Title size={128} />
-    </Sequence>
-    <Sequence from={plan.outroFrom} durationInFrames={OUTRO}>
-      <Outro size={46} />
-    </Sequence>
-    {hasMusic && <Audio src={staticFile("music.mp3")} volume={musicVolume} />}
+    <Overlays pillSize={40} chipSize={28} pillBottom={56} chipTop={52} />
+    <Cards introSize={60} outroSize={46} />
+    <Sound />
   </AbsoluteFill>
 );
 
@@ -59,7 +73,7 @@ const PANEL = { top: 520, h: 860 };
 
 const Headline: React.FC = () => {
   const frame = useCurrentFrame();
-  const p = spring({ frame: frame - plan.titleFrom, fps: FPS, config: { damping: 16 } });
+  const p = spring({ frame: frame - (plan.introFrom + plan.introDur), fps: FPS, config: { damping: 16 } });
   return (
     <div
       style={{
@@ -87,12 +101,7 @@ export const Vertical: React.FC = () => (
       <Footage shots={plan.shots} width={1080} height={PANEL.h} cropX={1.3} />
     </div>
     <Overlays pillSize={44} chipSize={26} pillBottom={330} chipTop={PANEL.top + 28} />
-    <Sequence from={plan.titleFrom} durationInFrames={TITLE}>
-      <Title size={118} />
-    </Sequence>
-    <Sequence from={plan.outroFrom} durationInFrames={OUTRO}>
-      <Outro size={38} />
-    </Sequence>
-    {hasMusic && <Audio src={staticFile("music.mp3")} volume={musicVolume} />}
+    <Cards introSize={46} outroSize={38} />
+    <Sound />
   </AbsoluteFill>
 );

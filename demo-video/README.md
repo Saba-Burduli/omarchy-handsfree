@@ -13,6 +13,18 @@ you press Enter, trims the silence and plays it back.
 Until those exist, `scripts/placeholder-voice.sh` makes test clips with macOS `say`
 in `voice/placeholder/`.
 
+Or generate them with ElevenLabs (key in `~/.config/elevenlabs.env` as
+`ELEVENLABS_API_KEY=...`). The same script makes the narrator lines from
+`narration.json`, the sound effects and a music bed (a looped sound-effects
+track on the free plan, since the Music API needs a paid one):
+
+```bash
+node scripts/elevenlabs.mjs commands    # voice/NN.wav (Sarah)
+node scripts/elevenlabs.mjs narration   # public/vo/*.mp3 (Liam), durations in src/vo.json
+node scripts/elevenlabs.mjs sfx         # public/sfx/*.mp3
+node scripts/elevenlabs.mjs music       # music.mp3
+```
+
 ## 2. Record a take
 
 On the Omarchy machine:
@@ -45,8 +57,8 @@ npx remotion render Wide out/demo-wide.mp4
 npx remotion render Vertical out/demo-vertical.mp4
 ```
 
-`src/config.ts` picks the hook, clip order, montage clips, section chips and the
-outro text. Zooms come only from the command log: the camera springs onto the
+`src/config.ts` picks the hook, clip order, montage clips, sections (chip +
+narrator line), intro cards timed to the narration, and the outro text. Zooms come only from the command log: the camera springs onto the
 window handsfree reported after each command, capped at 1:1 source pixels so
 it stays sharp. Put a track at `music.mp3` and re-run prep to add music; cuts
 snap to its beats.

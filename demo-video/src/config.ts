@@ -3,21 +3,38 @@
 export const config = {
   // The first thing on screen, before any text.
   hook: "02",
-  // Right after the hook.
-  title: ["Control Omarchy", "with your voice."],
-  // Clips in the order they play after the title (the hook isn't repeated).
-  order: ["04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"],
-  // Montage clips: just the command and a quick look at the result.
-  fast: ["07", "08", "12", "13", "14", "16", "17", "18", "19"],
+  // Clips in the order they play after the intro (the hook isn't repeated).
+  order: ["04", "05", "06", "09", "10", "11", "12", "13", "14", "15", "16", "18", "19"],
+  // Montage clips: the command and a shorter look at the result.
+  fast: ["12", "13", "14", "16", "18", "19"],
   // Extra seconds on a result worth looking at.
-  hold: { "02": 1.6, "05": 1.0, "06": 0.4, "09": 0.4, "11": 0.5, "15": 0.3 } as Record<string, number>,
-  // Small chip that appears when a section starts.
-  sections: { "04": "Apps", "09": "The web", "12": "Hands-free, everything" } as Record<string, string>,
+  hold: { "02": 1.4, "05": 1.2, "06": 0.5, "09": 0.4, "11": 0.6, "15": 0.4 } as Record<string, number>,
+  // Where a section starts: a chip on screen and a narrator line (narration.json)
+  // spoken over the end of the previous result.
+  sections: {
+    "04": { label: "Apps", vo: "apps" },
+    "09": { label: "The web", vo: "web" },
+    "12": { label: "Hands-free, everything", vo: "more" },
+  } as Record<string, { label: string; vo: string }>,
+  // Intro cards, timed (seconds) to the phrases of narration.json "intro".
+  intro: {
+    name: 0,
+    line: { at: 1.95, words: ["Control", "your", "entire", "desktop", "with", "just", "your", "voice."] },
+    chips: [
+      { at: 5.4, text: "Apps" },
+      { at: 6.05, text: "Commands" },
+      { at: 6.9, text: "The web" },
+      { at: 7.65, text: "All hands-free" },
+    ],
+    offline: 8.55,
+  },
   name: "Omarchy Hands-Free",
   tagline: "Voice + eye control for Omarchy. Runs offline.",
   repo: "github.com/Saba-Burduli/omarchy-handsfree",
   install: ["git clone https://github.com/Saba-Burduli/omarchy-handsfree", "cd omarchy-handsfree && ./install.sh"],
   keys: ["Super", "Alt", "V"],
+  // Outro beats (seconds from the outro start), timed to narration.json "outro".
+  outro: { keys: 2.7, repo: 3.6, footer: 4.4 },
 };
 
 export const theme = {

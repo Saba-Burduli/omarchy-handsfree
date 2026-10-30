@@ -15,3 +15,6 @@ src/take.json
 voice/*.wav
 voice/placeholder
 ffprofile
+public/vo
+public/sfx
+src/vo.json

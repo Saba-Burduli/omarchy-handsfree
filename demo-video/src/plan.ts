@@ -1,14 +1,16 @@
 // The edit decision list, computed from the take: which source seconds play
-// when, and where the camera points. Everything is in output frames.
+// when, where the camera points, and when narration and sound effects play.
+// Everything is in output frames.
 import { config } from "./config";
 import take from "./take.json";
+import vo from "./vo.json";
 
 export const FPS = 60;
 export const SOURCE = { w: take.source.width, h: take.source.height };
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Step = (typeof take.steps)[number];
-export type Segment = { from: number; dur: number; src: number }; // src in seconds
+export type Segment = { from: number; dur: number; src: number; muted: boolean }; // src in seconds
 export type Kind = "hook" | "normal" | "fast";
 export type Shot = {
   n: string;
@@ -20,19 +22,21 @@ export type Shot = {
   action: Segment;
   before: Rect; // camera while the command is spoken
   rect: Rect; // camera once the result shows, from the command log
-  section?: string;
 };
+export type Cue = { src: string; from: number; volume: number };
 
 const FULL: Rect = { x: 0, y: 0, w: SOURCE.w, h: SOURCE.h };
 const sec = (s: number) => Math.round(s * FPS);
+const voLen = (id: string) => (vo as Record<string, number>)[id] ?? 0;
 
-// Seconds kept around the spoken command and after the result appears.
-const SPEECH_PRE: Record<Kind, number> = { hook: 0.1, normal: 0.1, fast: 0.03 };
+// Seconds kept around the spoken command and after the result appears. The
+// lead-in lets the pill show up before the words, so each command reads clearly.
+const SPEECH_PRE: Record<Kind, number> = { hook: 0.15, normal: 0.4, fast: 0.3 };
 const SPEECH_POST = 0.05;
-const HOLD: Record<Kind, number> = { hook: 1.2, normal: 1.4, fast: 0.6 };
-const MIN_HOLD = 0.4;
-export const TITLE = sec(1.5);
-export const OUTRO = sec(6);
+const HOLD: Record<Kind, number> = { hook: 1.2, normal: 2.0, fast: 1.25 };
+const MIN_HOLD = 0.6;
+const OVERLAP = 12; // frames the intro/outro cards fade over the footage
+export const OUTRO = sec(7.5);
 
 const byN = new Map(take.steps.map((s) => [s.n, s]));
 const pad = (r: Rect, k: number): Rect => ({ x: r.x - (r.w * k) / 2, y: r.y - (r.h * k) / 2, w: r.w * (1 + k), h: r.h * (1 + k) });
@@ -46,12 +50,11 @@ function target(step: Step | undefined): Rect {
 
 // What was on screen while a command was being said: the previous recorded result.
 function before(step: Step): Rect {
-  const i = take.steps.indexOf(step);
-  const prev = take.steps[i - 1];
+  const prev = take.steps[take.steps.indexOf(step) - 1];
   return prev?.window ? pad(prev.window, 0.08) : FULL;
 }
 
-// With music, nudge each cut onto the nearest beat (by stretching the hold).
+// With music, nudge a cut onto the nearest beat (by stretching the hold).
 function snapToBeat(cut: number, holdStart: number): number {
   const beats = take.beats as number[] | null;
   if (!beats?.length) return cut;
@@ -76,32 +79,90 @@ function makeShot(n: string, kind: Kind, from: number): Shot {
     heard: step.heard || step.words,
     from,
     end: from + speechDur + actionDur,
-    speech: { from, dur: speechDur, src: speechStart },
-    action: { from: from + speechDur, dur: actionDur, src: actionSrc },
+    // Only the spoken command is heard from the footage.
+    speech: { from, dur: speechDur, src: speechStart, muted: false },
+    action: { from: from + speechDur, dur: actionDur, src: actionSrc, muted: true },
     before: before(step),
     rect: target(step),
-    section: config.sections[n],
   };
+}
+
+// Make room for a narrator line at the end of a shot by holding its result
+// longer. The screen stays as it is until the next command's result appears,
+// so the extra footage is real, just quiet.
+function stretchFor(shot: Shot, seconds: number, nextStep: Step) {
+  const room = sec(nextStep.visible! - 0.2 - shot.action.src);
+  const want = sec(seconds);
+  const dur = Math.max(shot.action.dur, Math.min(want, room));
+  shot.action.dur = dur;
+  shot.end = shot.action.from + dur;
 }
 
 function build() {
   const shots: Shot[] = [];
+  const voice: Cue[] = [];
+  const sfx: Cue[] = [];
+  const chips: { text: string; from: number }[] = [];
+
   const hook = makeShot(config.hook, "hook", 0);
   shots.push(hook);
-  const titleFrom = hook.end;
-  let cursor = titleFrom + TITLE;
-  for (const n of config.order) {
-    const shot = makeShot(n, config.fast.includes(n) ? "fast" : "normal", cursor);
+
+  // Intro card: the narrator explains the project, then introduces the first section.
+  const introFrom = hook.end - OVERLAP;
+  const first = config.sections[config.order[0]];
+  const introVo = introFrom + sec(0.25);
+  voice.push({ src: "vo/intro.mp3", from: introVo, volume: 1 });
+  let introEnd = introVo + sec(voLen("intro") + 0.3);
+  if (first) {
+    voice.push({ src: `vo/${first.vo}.mp3`, from: introEnd, volume: 1 });
+    introEnd += sec(voLen(first.vo) + 0.25);
+    chips.push({ text: first.label, from: introEnd });
+  }
+  sfx.push({ src: "sfx/whoosh.mp3", from: introFrom - 4, volume: 0.5 }, { src: "sfx/hit.mp3", from: introVo, volume: 0.55 });
+
+  let cursor = introEnd;
+  config.order.forEach((n, i) => {
+    const kind: Kind = config.fast.includes(n) ? "fast" : "normal";
+    const section = config.sections[n];
+    if (section && i > 0) {
+      // The line plays over the end of the previous result.
+      const prev = shots[shots.length - 1];
+      const len = voLen(section.vo);
+      // A beat on the result first, then the line, ending just before the cut.
+      stretchFor(prev, 0.6 + len + 0.35, byN.get(n)!);
+      const at = Math.max(prev.action.from + sec(0.6), prev.end - sec(len + 0.3));
+      voice.push({ src: `vo/${section.vo}.mp3`, from: at, volume: 1 });
+      chips.push({ text: section.label, from: at });
+      sfx.push({ src: "sfx/whoosh.mp3", from: at - 6, volume: 0.35 });
+      cursor = prev.end;
+    }
+    const shot = makeShot(n, kind, cursor);
     shots.push(shot);
     cursor = shot.end;
+  });
+
+  for (const s of shots) {
+    sfx.push({ src: "sfx/pop.mp3", from: s.from + 2, volume: 0.3 }, { src: "sfx/ding.mp3", from: s.action.from, volume: 0.32 });
   }
-  return { shots, titleFrom, outroFrom: cursor, total: cursor + OUTRO };
+  const outroFrom = cursor - OVERLAP;
+  voice.push({ src: "vo/outro.mp3", from: outroFrom + sec(0.35), volume: 1 });
+  sfx.push({ src: "sfx/whoosh.mp3", from: outroFrom - 4, volume: 0.5 }, { src: "sfx/hit.mp3", from: outroFrom + 6, volume: 0.45 });
+
+  return { shots, voice, sfx, chips, introFrom, introDur: introEnd - introFrom + OVERLAP, outroFrom, total: outroFrom + OUTRO };
 }
 
 export const plan = build();
 export const hasMusic = Array.isArray(take.beats);
 export const envelope = take.envelope as number[];
 export const envelopeFps = take.envelopeFps;
+
+// Someone is talking (command or narrator): music dips under it.
+export function speaking(frame: number) {
+  return (
+    plan.shots.some((s) => frame >= s.from && frame < s.action.from + 6) ||
+    plan.voice.some((v) => frame >= v.from - 6 && frame < v.from + sec(voLen(v.src.slice(3, -4)) + 0.2))
+  );
+}
 
 // -- camera ---------------------------------------------------------------------
 export function lerpRect(a: Rect, b: Rect, t: number): Rect {

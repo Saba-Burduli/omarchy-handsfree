@@ -92,7 +92,10 @@ const steps = clips.map((c, i) => {
   const next = clips[i + 1]?.start ?? Infinity;
   const entry = log.find((e) => e.t >= c.start - 0.05 && e.t < next);
   const t = entry ? entry.t + offset : null;
-  const visible = t === null ? null : changeTime(t, Math.min(3, (next === Infinity ? t + 3 : next + offset) - t));
+  // The recorder's video runs ~0.2 s ahead of its audio (which `offset` aligns
+  // the log to), so look for the change from a little before the logged action.
+  const from = Math.max(c.end + offset + 0.1, (t ?? 0) - 0.45);
+  const visible = t === null ? null : changeTime(from, Math.min(3, (next === Infinity ? t + 3 : next + offset) - from));
   return {
     n: c.n,
     words: c.words,

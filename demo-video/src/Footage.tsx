@@ -45,7 +45,7 @@ export const Footage: React.FC<{ shots: Shot[]; width: number; height: number; c
         {shots.flatMap((shot) =>
           [shot.speech, shot.action].map((seg, k) => (
             <Sequence key={`${shot.n}-${shot.from}-${k}`} from={seg.from} durationInFrames={seg.dur} premountFor={30}>
-              <Video src={src} trimBefore={Math.round(seg.src * FPS)} style={{ width: SOURCE.w, height: SOURCE.h }} />
+              <Video src={src} trimBefore={Math.round(seg.src * FPS)} volume={seg.muted ? 0 : 1} style={{ width: SOURCE.w, height: SOURCE.h }} />
             </Sequence>
           )),
         )}
