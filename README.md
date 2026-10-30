@@ -4,7 +4,7 @@ Control [Omarchy](https://omarchy.org) with your voice and your eyes.
 
 ![Voice control demo on Omarchy 4: open Google, type, search, open a terminal, switch workspaces, mouse grid](docs/demo.gif)
 
-▶ [Full 49-second demo with sound](docs/demo.mp4): every command is spoken; nothing is typed or clicked by hand.
+▶ [Full 66-second demo with voiceover](docs/demo.mp4): every action is a spoken command; nothing is typed or clicked by hand. (The narrator and the command voice are AI voices, so the audio is clean; see [dev/demo](dev/demo/README.md).)
 
 - Say **"open browser"**, **"open Google"**, **"open Claude Code"**, **"search for arch wiki hyprland"**, **"workspace two"**, **"type hello world"**, or turn on dictation and talk.
 - Turn on eye tracking and the pointer follows your gaze. Click by saying **"click"**, by holding your gaze still, or by a long deliberate blink.

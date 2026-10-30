@@ -1,0 +1,18 @@
+{
+  "intro": "This is Omarchy Hands-free. You talk, and Omarchy does it. Everything runs offline, on your own machine.",
+  "outro": "It's free and open source. Eye tracking works too: look at something, and say click. Link below.",
+  "steps": [
+    {"narration": "Turn on listening, and just say what you want.", "command": "Open Google.", "settle": 3.5, "caption": "Open Google"},
+    {"narration": "Speech becomes text locally, with Whisper.", "command": "Type, what is Omarchy.", "settle": 2.5, "caption": "Type what is Omarchy"},
+    {"command": "Press enter.", "settle": 3.5, "caption": "Press enter"},
+    {"command": "Scroll down.", "settle": 2.5, "caption": "Scroll down"},
+    {"narration": "It drives the whole desktop, not just the browser.", "command": "Open terminal.", "settle": 3.0, "caption": "Open terminal"},
+    {"command": "Workspace two.", "settle": 2.0, "caption": "Workspace two"},
+    {"command": "Workspace one.", "settle": 2.0, "caption": "Workspace one"},
+    {"narration": "For anything small, bring up the grid, and pick a number.", "command": "Show grid.", "settle": 2.0, "caption": "Show grid"},
+    {"command": "Five.", "settle": 2.0, "caption": "Five"},
+    {"command": "Close grid.", "settle": 1.8, "caption": "Close grid"},
+    {"command": "Close window.", "settle": 2.0, "caption": "Close window"},
+    {"command": "Stop listening.", "settle": 1.5, "caption": "Stop listening"}
+  ]
+}
