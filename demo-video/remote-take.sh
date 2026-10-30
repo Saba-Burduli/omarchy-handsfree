@@ -13,7 +13,7 @@ ssh_cmd="ssh -p $port"
 
 rsync -a -e "$ssh_cmd" --exclude node_modules --exclude takes --exclude out --exclude public \
   --exclude src --exclude ffprofile ./ "$host:$dir/"
-$ssh_cmd "$host" "cd $dir && ./record.sh $*"
+$ssh_cmd "$host" "cd $dir && START_THEME='${START_THEME:-}' ./record.sh $*"
 name=$($ssh_cmd "$host" "ls -t $dir/takes | head -1")
 rsync -a -e "$ssh_cmd" "$host:$dir/takes/$name" takes/
 # The voice on its own, for the editor's waveform and mix.

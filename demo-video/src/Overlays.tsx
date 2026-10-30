@@ -278,7 +278,7 @@ export const Intro: React.FC<{
   const { line, chips, offline } = config.intro;
 
   // The name starts big in the middle, then becomes a header for the rest.
-  const dock = sp(line.at - 0.1, 20);
+  const dock = sp(line[0].at - 0.1, 20);
   const name = sp(config.intro.name);
   const glow = 0.5 + 0.5 * Math.sin(frame / 25);
 
@@ -323,7 +323,7 @@ export const Intro: React.FC<{
           style={{
             width: "86%",
             textAlign: "center",
-            opacity: window(line.at, chips[0].at),
+            opacity: window(line[0].at, chips[0].at),
             fontFamily: inter,
             fontWeight: 800,
             fontSize: size * 1.75,
@@ -331,8 +331,8 @@ export const Intro: React.FC<{
             letterSpacing: -size * 0.04,
           }}
         >
-          {line.words.map((w, i) => {
-            const p = sp(line.at + i * 0.3);
+          {line.map(({ at, text: w }, i) => {
+            const p = sp(at);
             return (
               <span
                 key={i}

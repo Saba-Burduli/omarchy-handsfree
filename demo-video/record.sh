@@ -22,11 +22,14 @@ cd "$here"
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "$XDG_RUNTIME_DIR/hypr" | head -1)}
+# Omarchy's theme scripts need this; an SSH shell doesn't have it, the desktop session does.
+export OMARCHY_PATH=${OMARCHY_PATH:-$(systemctl --user show-environment | sed -n 's/^OMARCHY_PATH=//p')}
 
 FPS=${FPS:-60}
 QUALITY=${QUALITY:-high}  # gpu-screen-recorder -q: medium | high | very_high | ultra
 SETTLE=${SETTLE:-1.0}     # keep rolling this long after each logged result
 TIMEOUT=${TIMEOUT:-12}    # stop waiting for a clip's log line after this many seconds
+START_THEME=${START_THEME:-}  # switch to this theme before recording, so every take starts the same
 profile=${FF_PROFILE:-$here/ffprofile}
 conf=${XDG_CONFIG_HOME:-$HOME/.config}/handsfree/config.toml
 
@@ -78,7 +81,7 @@ cleanup() {
   systemctl --user restart handsfree
   pactl unload-module "$mic"; pactl unload-module "$sink"
   if [ -n "$orig_theme" ] && [ "$(omarchy-theme-current)" != "$orig_theme" ]; then
-    omarchy-theme-set "$orig_theme" >/dev/null 2>&1
+    omarchy-theme-set "$orig_theme" >/dev/null 2>&1 || echo "could not restore theme $orig_theme" >&2
   fi
   pkill -x firefox
   rm -f "$take/.stop" "$take/.recpid"
@@ -95,6 +98,8 @@ mkdir -p "$profile"
 pkill -x firefox || true
 sleep 1
 rm -rf "$profile"/sessionstore.jsonlz4 "$profile"/sessionstore-backups "$profile"/sessionCheckpoints.json
+
+[ -n "$START_THEME" ] && [ "$START_THEME" != "$orig_theme" ] && omarchy-theme-set "$START_THEME" >/dev/null 2>&1 && sleep 3
 
 # Start on workspace 1 with the pointer in the middle of the screen, where
 # new windows land, so scrolling reaches whatever window opens.
