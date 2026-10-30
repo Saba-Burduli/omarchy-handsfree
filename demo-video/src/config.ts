@@ -20,22 +20,22 @@ export const config = {
   intro: {
     name: 0,
     line: [
-      { at: 1.42, text: "Control" },
-      { at: 2.16, text: "your" },
-      { at: 2.62, text: "entire" },
-      { at: 3.6, text: "desktop" },
-      { at: 3.84, text: "with" },
-      { at: 4.3, text: "just" },
-      { at: 4.52, text: "your" },
-      { at: 4.88, text: "voice." },
+      { at: 2.18, text: "Control" },
+      { at: 2.36, text: "your" },
+      { at: 2.72, text: "entire" },
+      { at: 3.7, text: "desktop" },
+      { at: 3.96, text: "with" },
+      { at: 4.64, text: "just" },
+      { at: 4.86, text: "your" },
+      { at: 5.12, text: "voice." },
     ],
     chips: [
-      { at: 5.2, text: "Apps" },
-      { at: 5.98, text: "Commands" },
-      { at: 6.78, text: "The web" },
-      { at: 8.2, text: "All hands-free" },
+      { at: 6.28, text: "Apps" },
+      { at: 7.04, text: "Commands" },
+      { at: 7.78, text: "The web" },
+      { at: 8.64, text: "All hands-free" },
     ],
-    offline: 9.44,
+    offline: 10.22,
   },
   name: "Omarchy Hands-Free",
   tagline: "Voice + eye control for Omarchy. Runs offline.",
@@ -43,7 +43,7 @@ export const config = {
   install: ["git clone https://github.com/Saba-Burduli/omarchy-handsfree", "cd omarchy-handsfree && ./install.sh"],
   keys: ["Super", "Alt", "V"],
   // Outro beats (seconds from the outro start), timed to narration.json "outro".
-  outro: { keys: 2.4, repo: 4.1, footer: 4.7 },
+  outro: { keys: 2.1, repo: 3.6, footer: 4.3 },
 };
 
 export const theme = {
