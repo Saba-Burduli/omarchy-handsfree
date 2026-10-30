@@ -1,5 +1,17 @@
-"""Edit the raw take into the launch video: title card, eased zooms, captions,
-a cut, an end card, and a voiceover + command-voice soundtrack."""
+"""Fast-cut demo edit from a native-resolution, multi-part take.
+
+    python edit.py <demo dir> <out.mp4>
+
+Reads timeline.json (command times, active-window geometry, recording parts)
+and sync.json ({"part_lag": [seconds per part]}: how long after its logged
+start each part's first frame was captured).
+
+Each step becomes: command spoken (screen still) -> invisible cut over the
+dead time while handsfree waits for silence -> the result appearing. Views
+zoom onto the window Hyprland reported (never past 1.8x, so the 3454-wide
+source stays sharp at 1080p). A kinetic hook, an install card and an end
+card wrap it, and the ElevenLabs voiceover is mixed on top.
+"""
 
 import json
 import math
@@ -11,99 +23,157 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-D = Path(sys.argv[1])
-RAW = D / "raw2.mp4"
-OUT = Path(sys.argv[2])
+D, OUT = Path(sys.argv[1]), Path(sys.argv[2])
 W, H, FPS = 1920, 1080, 30
 script = json.loads((D / "script.json").read_text())
-durations = json.loads((D / "durations.json").read_text())
-timeline = {s["step"]: s for s in json.loads((D / "timeline.json").read_text())}
-PLAY_LAG = 0.08  # paplay starts this long after the logged time
+dur = json.loads((D / "durations.json").read_text())
+tl = json.loads((D / "timeline.json").read_text())
+sync = json.loads((D / "sync.json").read_text())
+steps = {s["step"]: s for s in tl["steps"]}
+ACCENT = (239, 68, 68)
+PLAY_LAG = 0.08
+MAX_ZOOM = 1.8
 
-# ---------------------------------------------------------------- timeline
-TITLE = 2.4            # title card
-SLOW = (0.6, 2.55)     # raw span stretched under the intro narration
-SLOW_END = 6.6         # output time the stretched span ends
-CUT = (22.14, 26.2)    # raw span removed ("scroll down" didn't move anything)
-RAW_END = 59.3
-END_CARD = 7.0
-XFADE = 0.3
-
-seg2_out = SLOW_END
-seg3_out = seg2_out + (CUT[0] - SLOW[1])
-footage_end = seg3_out + (RAW_END - CUT[1])
-TOTAL = footage_end + END_CARD
-
-
-def raw_to_out(t: float) -> float:
-    if t < SLOW[1]:
-        return TITLE + (t - SLOW[0]) / (SLOW[1] - SLOW[0]) * (SLOW_END - TITLE)
-    if t < CUT[0]:
-        return seg2_out + (t - SLOW[1])
-    if t < CUT[1]:
-        return seg3_out  # inside the removed span
-    return seg3_out + (t - CUT[1])
+# ------------------------------------------------------------------ source parts
+parts = []
+for k, p in enumerate(tl["parts"]):
+    path = D / Path(p["path"]).name
+    cap = cv2.VideoCapture(str(path))
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    first = p["start"] + sync["part_lag"][k]
+    parts.append({"path": path, "first": first, "last": first + n / 30.0, "cap": cap, "index": -1, "frame": None})
+SW = int(parts[0]["cap"].get(cv2.CAP_PROP_FRAME_WIDTH))
+SH = int(parts[0]["cap"].get(cv2.CAP_PROP_FRAME_HEIGHT))
+mon = tl["monitor"]
+PX = SW / (mon["width"] / mon["scale"])  # source px per logical px
 
 
-def out_to_raw(t: float) -> float | None:
-    if t < TITLE or t >= footage_end:
-        return None
-    if t < SLOW_END:
-        return SLOW[0] + (t - TITLE) / (SLOW_END - TITLE) * (SLOW[1] - SLOW[0])
-    if t < seg3_out:
-        return SLOW[1] + (t - seg2_out)
-    return CUT[1] + (t - seg3_out)
+def raw_at(t):
+    """Frame at wall-clock take time t (seconds), from whichever part covers it."""
+    part = parts[0]
+    for p in parts:
+        if t >= p["first"]:
+            part = p
+    t = min(max(t, part["first"]), part["last"] - 1 / 30)
+    want = int((t - part["first"]) * 30)
+    if want < part["index"]:
+        part["cap"].set(cv2.CAP_PROP_POS_FRAMES, want)
+        part["index"] = want - 1
+    while part["index"] < want:
+        ok, f = part["cap"].read()
+        if not ok:
+            break
+        part["index"] += 1
+        part["frame"] = f
+    return part["frame"]
 
 
-# ---------------------------------------------------------------- zoom path
-FULL = (960, 540, 1920)
-FIREFOX = (987, 549, 1300)
-SEARCH = (987, 470, 1000)
-BAR = (1074, 120, 560)
-MIC_ICON = (1074, 14)  # the bar's microphone indicator, raw coordinates
-GRID5 = (960, 540, 780)
-
-# (raw time, view) keyframes; views ease between consecutive keyframes
-KEYS = [
-    (0.0, FULL), (0.9, FULL), (1.5, BAR), (2.35, BAR), (3.0, FULL),
-    (7.9, FULL), (8.9, FIREFOX), (14.4, FIREFOX), (15.1, SEARCH), (17.9, SEARCH),
-    (18.7, FIREFOX), (22.2, FIREFOX), (26.4, FIREFOX), (27.5, FULL),
-    (48.4, FULL), (49.2, GRID5), (51.4, GRID5), (52.2, FULL),
-    (60.0, FULL),
-]
-
-
-def ease(x: float) -> float:
-    x = min(max(x, 0.0), 1.0)
-    return 4 * x ** 3 if x < 0.5 else 1 - (-2 * x + 2) ** 3 / 2
+def change_series():
+    """Mean frame difference at 240x135 for every frame of the take, by wall time."""
+    series = []
+    for p in parts:
+        cap = cv2.VideoCapture(str(p["path"]))
+        prev, n = None, 0
+        while True:
+            ok, f = cap.read()
+            if not ok:
+                break
+            g = cv2.resize(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), (240, 135)).astype(np.float32)
+            if prev is not None:
+                series.append((p["first"] + n / 30.0, float(np.abs(g - prev).mean())))
+            prev, n = g, n + 1
+    return series
 
 
-def view_at(t: float):
-    for (t0, v0), (t1, v1) in zip(KEYS, KEYS[1:]):
-        if t0 <= t <= t1:
-            k = ease((t - t0) / (t1 - t0)) if t1 > t0 else 1
-            # interpolate zoom in log space so it feels constant-speed
-            w = math.exp(math.log(v0[2]) * (1 - k) + math.log(v1[2]) * k)
-            return (v0[0] + (v1[0] - v0[0]) * k, v0[1] + (v1[1] - v0[1]) * k, w)
-    return KEYS[-1][1]
+CHANGES = change_series()
 
 
-def view_transform(view):
-    cx, cy, w = view
-    h = w * H / W
-    x = min(max(cx - w / 2, 0), W - w)
-    y = min(max(cy - h / 2, 0), H - h)
-    return x, y, W / w
+def action_time(after, limit=3.0, threshold=0.6):
+    for t, v in CHANGES:
+        if after <= t <= after + limit and v > threshold:
+            return t
+    return None
 
 
-def apply_view(frame, view):
-    x, y, s = view_transform(view)
-    m = np.float32([[s, 0, -x * s], [0, s, -y * s]])
-    return cv2.warpAffine(frame, m, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+# ------------------------------------------------------------------ views
+FULL_STEPS = {"Next theme", "Workspace two", "Workspace one", "Show grid", "Close grid", "Stop listening", "Close window"}
+FULL = (SW / 2, SH / 2, SW)
 
 
-# ---------------------------------------------------------------- type
-def font(size: int, weight: str = "Bold"):
+def fit(x, y, w, h, pad=0.07):
+    w2, h2 = w * (1 + 2 * pad), h * (1 + 2 * pad)
+    vw = min(max(w2, h2 * 16 / 9, SW / MAX_ZOOM), SW)
+    return (x + w / 2, y + h / 2, vw)
+
+
+def view_for(i):
+    caption = script["steps"][i - 1]["caption"]
+    if caption in FULL_STEPS:
+        return FULL
+    if caption == "Five":
+        return (SW / 2, SH / 2, SW / MAX_ZOOM)
+    win = steps[i].get("window") or {}
+    if not win.get("at"):
+        return FULL
+    (x, y), (w, h) = win["at"], win["size"]
+    return fit(x * PX, y * PX, w * PX, h * PX)
+
+
+# ------------------------------------------------------------------ build the cut list
+# segment: dict(kind, a, b (wall times) or length, step, view, from, xfade)
+segs = [{"kind": "hook", "len": dur["hook"] + 0.85}]  # hold the full sentence a beat
+la = tl["listen_at"]
+segs.append({"kind": "footage", "a": la - 0.1, "b": la - 0.1 + max(1.7, dur["intro"] + 0.3), "view": "bar", "xfade": True})
+SKIP = {9, 21}  # a second "close window" and "stop listening" show nothing new
+USED = [i for i in range(1, len(script["steps"]) + 1) if i not in SKIP]
+prev_view = FULL
+for i in USED:
+    spec, s = script["steps"][i - 1], steps[i]
+    view = view_for(i)
+    start = s["narration_at"] if s["narration_at"] is not None else s["command_at"] - 0.05
+    act = action_time(s["command_end"] + 0.15)
+    if act is not None:
+        # Cut to the result while the command's last syllable is still playing:
+        # the wait for end-of-speech + transcription (~1 s) is cut out.
+        spoken = s["command_at"] + PLAY_LAG + max(0.45, 0.62 * dur[f"c{i:02d}"])
+        segs.append({"kind": "footage", "a": start, "b": spoken, "step": i, "view": view,
+                     "from": prev_view, "xfade": True, "first": True})
+        segs.append({"kind": "footage", "a": act - 0.04, "b": act + max(0.6, spec["show"] * 0.55), "step": i,
+                     "view": view, "from": view, "xfade": False})
+    else:
+        segs.append({"kind": "footage", "a": start, "b": s["command_end"] + spec["show"], "step": i, "view": view,
+                     "from": prev_view, "xfade": True, "first": True})
+    prev_view = view
+segs.append({"kind": "install", "len": dur["install"] + 0.7})
+segs.append({"kind": "end", "len": dur["outro"] + 1.1})
+
+t = 0.0
+for sg in segs:
+    sg["start"] = t
+    sg["len"] = sg.get("len", (sg.get("b", 0) - sg.get("a", 0)))
+    t += sg["len"]
+TOTAL = t
+
+
+def out_of(i, wall):
+    """Output time for a wall time inside step i's segments."""
+    for sg in segs:
+        if sg.get("step") == i and sg["a"] <= wall <= sg["b"]:
+            return sg["start"] + wall - sg["a"]
+    first = next(sg for sg in segs if sg.get("step") == i)
+    return first["start"]
+
+
+def step_end(i):
+    return max(sg["start"] + sg["len"] for sg in segs if sg.get("step") == i)
+
+
+def step_start(i):
+    return min(sg["start"] for sg in segs if sg.get("step") == i)
+
+
+# ------------------------------------------------------------------ drawing
+def font(size, weight="Bold"):
     f = ImageFont.truetype("/System/Library/Fonts/SFNS.ttf", size)
     try:
         f.set_variation_by_name(weight)
@@ -112,241 +182,281 @@ def font(size: int, weight: str = "Bold"):
     return f
 
 
-MONO = lambda size: ImageFont.truetype("/System/Library/Fonts/SFNSMono.ttf", size)
+def mono(size):
+    return ImageFont.truetype("/System/Library/Fonts/SFNSMono.ttf", size)
 
 
-def text_size(draw, text, f):
-    l, t, r, b = draw.textbbox((0, 0), text, font=f)
-    return r - l, b - t, l, t
+def bbox(d, text, f):
+    l, t_, r, b = d.textbbox((0, 0), text, font=f)
+    return r - l, b - t_, l, t_
 
 
-def command_pill(text: str) -> Image.Image:
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    f, small = font(54, "Bold"), font(28, "Semibold")
-    label = "YOU SAY"
-    tw, th, tl, tt = text_size(d, f"“{text}”", f)
-    lw, lh, ll, lt = text_size(d, label, small)
-    pad_x, dot = 44, 22
-    width = pad_x * 2 + dot + 22 + max(tw, lw)
-    height = 150
-    x0, y0 = (W - width) // 2, H - height - 70
-    shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 10, x0 + width, y0 + height + 10), 40, fill=(0, 0, 0, 120))
-    img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(18)))
-    d.rounded_rectangle((x0, y0, x0 + width, y0 + height), 40, fill=(18, 20, 24, 235), outline=(255, 255, 255, 40), width=2)
-    cx = x0 + pad_x + dot // 2
-    d.ellipse((cx - dot // 2, y0 + 70 - dot // 2, cx + dot // 2, y0 + 70 + dot // 2), fill=(239, 68, 68, 255))
-    tx = x0 + pad_x + dot + 22
-    d.text((tx - ll, y0 + 26 - lt), label, font=small, fill=(239, 68, 68, 255))
-    d.text((tx - tl, y0 + 62 - tt), f"“{text}”", font=f, fill=(255, 255, 255, 255))
-    return img
+def ease(x):
+    x = min(max(x, 0.0), 1.0)
+    return 1 - (1 - x) ** 3
 
 
-def subtitle(text: str) -> Image.Image:
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    f = font(40, "Semibold")
-    tw, th, tl, tt = text_size(d, text, f)
-    x0, y0 = (W - tw) // 2, H - 150
-    d.rounded_rectangle((x0 - 30, y0 - 22, x0 + tw + 30, y0 + th + 26), 18, fill=(0, 0, 0, 150))
-    d.text((x0 - tl, y0 - tt), text, font=f, fill=(255, 255, 255, 245))
-    return img
+def ease_io(x):
+    x = min(max(x, 0.0), 1.0)
+    return 4 * x ** 3 if x < 0.5 else 1 - (-2 * x + 2) ** 3 / 2
 
 
-def card_background(frame) -> Image.Image:
-    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).filter(ImageFilter.GaussianBlur(28))
-    dark = Image.new("RGB", (W, H), (10, 12, 16))
-    return Image.blend(img, dark, 0.62).convert("RGBA")
+def lerp_view(a, b, k):
+    w = math.exp(math.log(a[2]) * (1 - k) + math.log(b[2]) * k)
+    return (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, w)
 
 
-def title_layer() -> Image.Image:
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    lines = [
-        ("Omarchy Hands-free", font(120, "Bold"), (255, 255, 255, 255), 0),
-        ("Control your desktop with your voice.", font(48, "Medium"), (220, 224, 230, 255), 40),
-        ("Offline  ·  Open source  ·  Built for Omarchy", font(32, "Semibold"), (239, 68, 68, 255), 34),
-    ]
-    heights = [text_size(d, t, f)[1] for t, f, _, _ in lines]
-    y = (H - sum(heights) - sum(g for *_, g in lines)) // 2 - 30
-    for (t, f, c, gap), h in zip(lines, heights):
-        w, _, l, top = text_size(d, t, f)
-        y += gap
-        d.text(((W - w) // 2 - l, y - top), t, font=f, fill=c)
-        y += h
-    return img
+def render_view(frame, view):
+    cx, cy, w = view
+    h = w * 9 / 16
+    x0 = min(max(cx - w / 2, 0), SW - w)
+    y0 = min(max(cy - h / 2, 0), SH - h)
+    ix, iy = int(x0), int(y0)
+    iw, ih = min(int(math.ceil(w)) + 2, SW - ix), min(int(math.ceil(h)) + 2, SH - iy)
+    crop = frame[iy:iy + ih, ix:ix + iw]
+    s = W / w
+    scaled = cv2.resize(crop, (max(W, int(round(iw * s))), max(H, int(round(ih * s)))),
+                        interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_CUBIC)
+    m = np.float32([[1, 0, -(x0 - ix) * s], [0, 1, -(y0 - iy) * s]])
+    return cv2.warpAffine(scaled, m, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE), (x0, y0, s)
 
 
-def end_layer() -> Image.Image:
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    rows = [
-        ("Omarchy Hands-free", font(104, "Bold"), (255, 255, 255, 255)),
-        ("Voice and eye control for Omarchy. Free and open source.", font(42, "Medium"), (220, 224, 230, 255)),
-    ]
-    y = 300
-    for t, f, c in rows:
-        w, h, l, top = text_size(d, t, f)
-        d.text(((W - w) // 2 - l, y - top), t, font=f, fill=c)
-        y += h + 46
-    cmd = "github.com/Saba-Burduli/omarchy-handsfree"
-    f = MONO(46)
-    w, h, l, top = text_size(d, cmd, f)
-    box = ((W - w) // 2 - 40, y + 30, (W + w) // 2 + 40, y + 30 + h + 60)
-    d.rounded_rectangle(box, 22, fill=(18, 20, 24, 240), outline=(239, 68, 68, 200), width=3)
-    d.text(((W - w) // 2 - l, y + 60 - top), cmd, font=f, fill=(255, 255, 255, 255))
-    hint = "git clone, then ./install.sh"
-    f2 = font(32, "Semibold")
-    w2, h2, l2, t2 = text_size(d, hint, f2)
-    d.text(((W - w2) // 2 - l2, box[3] + 40 - t2), hint, font=f2, fill=(170, 176, 186, 255))
-    return img
+def to_bgr(img):
+    return cv2.cvtColor(np.asarray(img.convert("RGB")), cv2.COLOR_RGB2BGR)
 
 
-# ---------------------------------------------------------------- overlays schedule (output times)
-overlays = []  # (start, end, image)
-intro_at = 0.35
-overlays.append((TITLE + 0.2, SLOW_END - 0.15, subtitle("You talk, and Omarchy does it. Everything runs offline.")))
-for i, step in enumerate(script["steps"], 1):
-    s = timeline[i]
-    if s["command_at"] > CUT[0] and s["command_at"] < CUT[1]:
-        continue  # cut
-    if step.get("narration"):
-        n0 = raw_to_out(s["narration_at"])
-        overlays.append((n0 + 0.05, n0 + durations[f"n{i:02d}"] + 0.25, subtitle(step["narration"])))
-    c0 = raw_to_out(s["command_at"] + PLAY_LAG)
-    nxt = timeline.get(i + 1)
-    limit = raw_to_out(nxt["narration_at"] or nxt["command_at"]) - 0.1 if nxt else footage_end - 0.2
-    if nxt and CUT[0] < nxt["command_at"] < CUT[1]:
-        nn = timeline.get(i + 2)
-        limit = min(limit, raw_to_out(CUT[0]) - 0.1)
-    overlays.append((c0, min(raw_to_out(s["command_end"]) + 1.6, limit), command_pill(step["caption"])))
-
-
-def alpha_for(t, start, end, fade=0.18):
-    if t < start or t > end:
-        return 0.0
-    return min(1.0, (t - start) / fade, (end - t) / fade)
-
-
-def blend(base: np.ndarray, layer: Image.Image, alpha: float) -> np.ndarray:
+def overlay(frame, layer, alpha=1.0, scale=1.0):
     if alpha <= 0:
-        return base
-    rgba = np.asarray(layer, dtype=np.float32)
-    a = rgba[..., 3:4] / 255.0 * alpha
-    rgb = rgba[..., :3][..., ::-1]  # to BGR
-    return (base * (1 - a) + rgb * a).astype(np.uint8)
+        return frame
+    if scale != 1.0:
+        w, h = layer.size
+        small = layer.resize((int(w * scale), int(h * scale)), Image.BILINEAR)
+        canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        canvas.alpha_composite(small, ((W - small.size[0]) // 2, (H - small.size[1]) // 2 + int((1 - scale) * 380)))
+        layer = canvas
+    arr = np.asarray(layer, dtype=np.float32)
+    a = arr[..., 3:4] / 255.0 * alpha
+    return (frame * (1 - a) + arr[..., :3][..., ::-1] * a).astype(np.uint8)
 
 
-# ---------------------------------------------------------------- render
-cap = cv2.VideoCapture(str(RAW))
-raw_fps = cap.get(cv2.CAP_PROP_FPS) or 30
-raw_index, raw_frame = -1, None
+def pill(text):
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    f, small = font(58, "Bold"), font(26, "Bold")
+    quoted = f"“{text}”"
+    tw, th, tl_, tt = bbox(d, quoted, f)
+    lw, lh, ll, lt = bbox(d, "YOU SAY", small)
+    width, height = 44 * 2 + 22 + 24 + max(tw, lw), 152
+    x0, y0 = (W - width) // 2, H - height - 60
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((x0, y0 + 12, x0 + width, y0 + height + 12), 40, fill=(0, 0, 0, 150))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(20)))
+    d.rounded_rectangle((x0, y0, x0 + width, y0 + height), 40, fill=(16, 18, 22, 240), outline=(255, 255, 255, 45), width=2)
+    cx = x0 + 55
+    d.ellipse((cx - 11, y0 + 76 - 11, cx + 11, y0 + 76 + 11), fill=ACCENT + (255,))
+    tx = x0 + 90
+    d.text((tx - ll, y0 + 26 - lt), "YOU SAY", font=small, fill=ACCENT + (255,))
+    d.text((tx - tl_, y0 + 62 - tt), quoted, font=f, fill=(255, 255, 255, 255))
+    return img
 
 
-def raw_at(t: float):
-    global raw_index, raw_frame
-    want = int(round(t * raw_fps))
-    while raw_index < want:
-        ok, f = cap.read()
-        if not ok:
-            break
-        raw_index += 1
-        if f.shape[1] != W:
-            f = cv2.resize(f, (W, H), interpolation=cv2.INTER_AREA)
-        raw_frame = f
-    return raw_frame
+def headline(text):
+    """Narration as a bold top headline, so it never collides with the pill."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    f = font(50, "Bold")
+    tw, th, l, t_ = bbox(d, text, f)
+    x0, y = (W - tw) // 2, 70
+    d.rounded_rectangle((x0 - 34, y - 24, x0 + tw + 34, y + th + 28), 22, fill=(0, 0, 0, 175))
+    d.text((x0 - l, y - t_), text, font=f, fill=(255, 255, 255, 252))
+    return img
 
 
-# Card backgrounds from real frames (desktop at the start, last frame at the end).
-first = raw_at(1.0)
-title_bg = card_background(first)
-title_fg = title_layer()
-end_fg = end_layer()
+def card_bg(frame):
+    img = Image.fromarray(cv2.cvtColor(cv2.resize(frame, (W, H), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB))
+    return Image.blend(img.filter(ImageFilter.GaussianBlur(30)), Image.new("RGB", (W, H), (9, 10, 14)), 0.66)
 
-enc = subprocess.Popen(
-    ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS),
-     "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", str(D / "video.mp4")],
-    stdin=subprocess.PIPE)
 
-title_np = cv2.cvtColor(np.asarray(Image.alpha_composite(title_bg, title_fg).convert("RGB")), cv2.COLOR_RGB2BGR)
-title_bg_np = cv2.cvtColor(np.asarray(title_bg.convert("RGB")), cv2.COLOR_RGB2BGR)
-last_footage = None
-cut_from = None
-end_np = None
-n_frames = int(TOTAL * FPS)
-for n in range(n_frames):
+def text_center(d, text, f, y, fill):
+    w, h, l, t_ = bbox(d, text, f)
+    d.text(((W - w) // 2 - l, y - t_), text, font=f, fill=fill)
+    return h
+
+
+first_bg = card_bg(raw_at(parts[0]["first"] + 0.3))
+
+HOOK_WORDS = ["What", "if", "you", "could", "just", "talk", "to", "your", "desktop?"]
+
+
+def hook_frame(t):
+    img = first_bg.copy().convert("RGBA")
+    d = ImageDraw.Draw(img)
+    f = font(104, "Bold")
+    shown = min(len(HOOK_WORDS), int(t / (dur["hook"] * 0.8) * len(HOOK_WORDS)) + 1)
+    rows = (HOOK_WORDS[:5], HOOK_WORDS[5:])
+    for r, words in enumerate(rows):
+        text = " ".join(words)
+        tw, th, l, tt = bbox(d, text, f)
+        x, y = (W - tw) // 2 - l, 360 + r * 150
+        for k, word in enumerate(words):
+            idx = (0 if r == 0 else len(rows[0])) + k
+            if idx >= shown:
+                continue
+            px = d.textlength(" ".join(words[:k]) + (" " if k else ""), font=f)
+            pop = ease((t - idx * dur["hook"] * 0.8 / len(HOOK_WORDS)) / 0.12)
+            color = ACCENT if word in ("talk", "desktop?") else (255, 255, 255)
+            d.text((x + px, y - tt + (1 - pop) * 18), word, font=f, fill=color + (int(255 * pop),))
+    return to_bgr(img)
+
+
+INSTALL_LINES = ["git clone https://github.com/Saba-Burduli/omarchy-handsfree",
+                 "cd omarchy-handsfree && ./install.sh"]
+INSTALL_LEN = dur["install"] + 0.7
+
+
+def install_frame(t):
+    img = first_bg.copy().convert("RGBA")
+    d = ImageDraw.Draw(img)
+    k0 = ease(t / 0.3)
+    text_center(d, "Install in one command", font(76, "Bold"), 230 + (1 - k0) * 20, (255, 255, 255, int(255 * k0)))
+    f = mono(40)
+    box = (190, 360, W - 190, 590)
+    d.rounded_rectangle(box, 26, fill=(14, 16, 20, 245), outline=ACCENT + (190,), width=3)
+    for k, c in enumerate([(255, 95, 86), (255, 189, 46), (39, 201, 63)]):
+        d.ellipse((box[0] + 30 + k * 34, box[1] + 26, box[0] + 50 + k * 34, box[1] + 46), fill=c + (255,))
+    total = sum(len(s) for s in INSTALL_LINES)
+    typed = int(min(1.0, t / (INSTALL_LEN * 0.45)) * total)
+    y = box[1] + 84
+    for line in INSTALL_LINES:
+        part, typed = line[:max(0, typed)], typed - len(line)
+        d.text((box[0] + 50, y), "$", font=f, fill=ACCENT + (255,))
+        d.text((box[0] + 50 + d.textlength("$ ", font=f), y), part, font=f, fill=(235, 238, 242, 255))
+        y += 64
+    if t > INSTALL_LEN * 0.5:
+        k = ease((t - INSTALL_LEN * 0.5) / 0.3)
+        fk, ft = font(46, "Bold"), font(46, "Semibold")
+        keys = ["Super", "Alt", "V"]
+        widths = [d.textlength(x, font=fk) + 64 for x in keys]
+        total_w = sum(widths) + 2 * 74 + d.textlength("and talk", font=ft) + 44
+        x, y0 = (W - total_w) / 2, 680 + (1 - k) * 30
+        for key, kw in zip(keys, widths):
+            d.rounded_rectangle((x, y0, x + kw, y0 + 90), 16, fill=(30, 33, 40, int(255 * k)), outline=(255, 255, 255, int(110 * k)), width=2)
+            d.text((x + 32, y0 + 18), key, font=fk, fill=(255, 255, 255, int(255 * k)))
+            x += kw
+            if key != "V":
+                d.text((x + 24, y0 + 18), "+", font=fk, fill=(170, 175, 185, int(255 * k)))
+                x += 74
+        d.text((x + 44, y0 + 18), "and talk", font=ft, fill=ACCENT + (int(255 * k),))
+    return to_bgr(img)
+
+
+def end_frame(t, bg):
+    img = bg.copy().convert("RGBA")
+    d = ImageDraw.Draw(img)
+    k = ease(t / 0.45)
+    a = int(255 * k)
+    y = 290 + (1 - k) * 30
+    y += text_center(d, "Omarchy Hands-free", font(116, "Bold"), y, (255, 255, 255, a)) + 46
+    y += text_center(d, "Voice control for Omarchy. Offline. Free and open source.", font(42, "Medium"), y, (220, 224, 230, a)) + 72
+    f = mono(46)
+    url = "github.com/Saba-Burduli/omarchy-handsfree"
+    w, h, l, tt = bbox(d, url, f)
+    d.rounded_rectangle(((W - w) // 2 - 44, y - 30, (W + w) // 2 + 44, y + h + 34), 22, fill=(14, 16, 20, int(240 * k)),
+                        outline=ACCENT + (int(220 * k),), width=3)
+    d.text(((W - w) // 2 - l, y - tt), url, font=f, fill=(255, 255, 255, a))
+    text_center(d, "Edited for pace: each action takes about a second.   Voice: ElevenLabs", font(26, "Medium"), H - 70,
+                (150, 155, 165, int(200 * k)))
+    return to_bgr(img)
+
+
+# ------------------------------------------------------------------ captions
+captions = []
+intro_seg = segs[1]
+captions.append((intro_seg["start"] + 0.05, intro_seg["start"] + intro_seg["len"] - 0.05, headline("Meet Omarchy Hands-free."), "head"))
+for i in USED:
+    spec, s = script["steps"][i - 1], steps[i]
+    st = step_start(i)
+    if spec.get("narration"):
+        captions.append((st + 0.03, st + dur[f"n{i:02d}"] + 0.2, headline(spec["narration"]), "head"))
+    captions.append((out_of(i, s["command_at"] + PLAY_LAG), step_end(i) - 0.02, pill(spec["caption"]), "pill"))
+
+# ------------------------------------------------------------------ render
+MIC = (1074 / 1920 * SW, 14 / 1080 * SH)
+BAR_VIEW = (MIC[0], 0, SW / MAX_ZOOM)
+enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}",
+                        "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "16",
+                        "-pix_fmt", "yuv420p", str(D / "video.mp4")], stdin=subprocess.PIPE)
+idx, last_out, last_src, end_bg = 0, None, None, None
+XF = 0.12
+for n in range(int(TOTAL * FPS)):
     t = n / FPS
-    raw_t = out_to_raw(t)
-    if raw_t is None and t < TITLE:
-        # title card: gentle push-in and fade-in of the text
-        k = ease(t / 0.6)
-        view = (960, 540, W / (1.0 + 0.03 * t / TITLE))  # slow push-in
-        frame = cv2.addWeighted(apply_view(title_bg_np, view), 1 - k, apply_view(title_np, view), k, 0)
-    elif raw_t is not None:
-        src = raw_at(raw_t)
-        view = view_at(raw_t)
-        frame = apply_view(src, view)
-        if 1.45 <= raw_t <= 2.5:  # pulse a ring around the mic icon as listening turns on
-            x, y, s = view_transform(view)
-            px, py = int((MIC_ICON[0] - x) * s), int((MIC_ICON[1] - y) * s)
-            phase = (raw_t - 1.45) * 2.2
-            radius = int(s * (9 + 6 * (phase % 1)))
-            ring = frame.copy()
-            cv2.circle(ring, (px, py), radius, (68, 68, 239), max(2, int(s * 1.6)), cv2.LINE_AA)
-            fade = min(1.0, (raw_t - 1.45) / 0.15, (2.5 - raw_t) / 0.15) * (1 - 0.6 * (phase % 1))
-            frame = cv2.addWeighted(frame, 1 - fade, ring, fade, 0)
-        # crossfade into the footage after the title
-        if t < TITLE + XFADE:
-            k = (t - TITLE) / XFADE
-            frame = cv2.addWeighted(apply_view(title_np, (960, 540, W / 1.03)), 1 - k, frame, k, 0)
-        # crossfade across the cut
-        if seg3_out <= t < seg3_out + XFADE and cut_from is not None:
-            k = (t - seg3_out) / XFADE
-            frame = cv2.addWeighted(cut_from, 1 - k, frame, k, 0)
-        if t < seg3_out:
-            cut_from = frame.copy()
-        last_footage = frame
+    while idx + 1 < len(segs) and t >= segs[idx + 1]["start"]:
+        idx += 1
+    sg = segs[idx]
+    local = t - sg["start"]
+    if sg["kind"] == "hook":
+        frame = hook_frame(local)
+    elif sg["kind"] == "install":
+        frame = install_frame(local)
+    elif sg["kind"] == "end":
+        end_bg = end_bg or card_bg(last_src)
+        frame = end_frame(local, end_bg)
     else:
-        if end_np is None:
-            end_bg = card_background(last_footage)
-            end_np = cv2.cvtColor(np.asarray(Image.alpha_composite(end_bg, end_fg).convert("RGB")), cv2.COLOR_RGB2BGR)
-        k = ease((t - footage_end) / 0.6)
-        frame = cv2.addWeighted(last_footage, 1 - k, end_np, k, 0)
-    for start, end, layer in overlays:
-        a = alpha_for(t, start, end)
-        if a:
-            frame = blend(frame.astype(np.float32), layer, a)
-    enc.stdin.write(np.ascontiguousarray(frame, dtype=np.uint8).tobytes())
+        src = raw_at(sg["a"] + local)
+        if sg["view"] == "bar":
+            L = sg["len"]
+            k = ease_io(local / 0.45) if local < 0.45 else (1 - ease_io((local - L + 0.4) / 0.4) if local > L - 0.4 else 1)
+            view = lerp_view(FULL, BAR_VIEW, k)
+        else:
+            step_t = t - step_start(sg["step"])
+            k = ease(step_t / 0.4) if sg.get("first") else 1
+            view = lerp_view(sg["from"], sg["view"], k)
+            view = (view[0], view[1], view[2] * (1 - 0.03 * min(step_t / 3.0, 1)))
+        frame, (x0, y0, s) = render_view(src, view)
+        if sg["view"] == "bar" and 0.25 < local < sg["len"] - 0.3:
+            phase = (local * 1.8) % 1
+            ring = frame.copy()
+            p = (int((MIC[0] - x0) * s), int((MIC[1] - y0) * s))
+            cv2.circle(ring, p, int(s * PX * (9 + 6 * phase)), ACCENT[::-1], max(2, int(s * PX * 1.4)), cv2.LINE_AA)
+            frame = cv2.addWeighted(frame, 1 - 0.9 * (1 - phase), ring, 0.9 * (1 - phase), 0)
+        last_src = src
+    if sg.get("xfade", sg["kind"] != "footage") and local < XF and last_out is not None and idx > 0:
+        frame = cv2.addWeighted(last_out, 1 - local / XF, frame, local / XF, 0)
+    for c0, c1, layer, kind in captions:
+        if c0 <= t <= c1:
+            alpha = min(1.0, (t - c0) / 0.09, (c1 - t) / 0.09)
+            frame = overlay(frame, layer, alpha, 0.93 + 0.07 * ease((t - c0) / 0.13) if kind == "pill" else 1.0)
+    if idx + 1 < len(segs) and t + 1 / FPS >= segs[idx + 1]["start"]:
+        last_out = frame.copy()
+    enc.stdin.write(np.ascontiguousarray(frame).tobytes())
 enc.stdin.close()
 enc.wait()
 
-# ---------------------------------------------------------------- audio
+# ------------------------------------------------------------------ audio
 inputs, filters, labels = [], [], []
 
 
-def place(path: Path, at: float, gain: float):
+def place(name, at, gain=1.0):
     k = len(inputs) // 2
-    inputs.extend(["-i", str(path)])
+    inputs.extend(["-i", str(D / "audio" / f"{name}.wav")])
     ms = max(0, int(at * 1000))
     filters.append(f"[{k}:a]aresample=48000,volume={gain},adelay={ms}|{ms}[a{k}]")
     labels.append(f"[a{k}]")
 
 
-place(D / "audio" / "intro.wav", intro_at, 1.0)
-for i, step in enumerate(script["steps"], 1):
-    s = timeline[i]
-    if CUT[0] < s["command_at"] < CUT[1]:
-        continue
-    if step.get("narration"):
-        place(D / "audio" / f"n{i:02d}.wav", raw_to_out(s["narration_at"]), 1.0)
-    place(D / "audio" / f"c{i:02d}.wav", raw_to_out(s["command_at"] + PLAY_LAG), 0.95)
-place(D / "audio" / "outro.wav", footage_end + 0.5, 1.0)
+place("hook", 0.15)
+place("intro", intro_seg["start"] + 0.05)
+for i in USED:
+    spec = script["steps"][i - 1]
+    if spec.get("narration"):
+        place(f"n{i:02d}", step_start(i) + 0.03)
+    place(f"c{i:02d}", out_of(i, steps[i]["command_at"] + PLAY_LAG), 0.9)
+place("install", segs[-2]["start"] + 0.1)
+place("outro", segs[-1]["start"] + 0.2)
 mix = ";".join(filters) + ";" + "".join(labels) + \
-    f"amix=inputs={len(labels)}:normalize=0,apad,atrim=0:{TOTAL:.3f},loudnorm=I=-16:TP=-1.5:LRA=11[out]"
-subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", mix, "-map", "[out]",
-                "-ac", "2", "-ar", "48000", str(D / "audio.wav")], check=True)
-subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(D / "video.mp4"), "-i", str(D / "audio.wav"),
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(OUT)],
-               check=True)
-print(f"{OUT}  {TOTAL:.1f}s")
+    f"amix=inputs={len(labels)}:normalize=0,apad,atrim=0:{TOTAL:.3f},loudnorm=I=-15:TP=-1.5:LRA=11[out]"
+subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", mix, "-map", "[out]", "-ac", "2", "-ar", "48000",
+                str(D / "audio_mix.wav")], check=True)
+subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(D / "video.mp4"), "-i", str(D / "audio_mix.wav"), "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(OUT)], check=True)
+print(f"{OUT}  {TOTAL:.1f}s  from {SW}x{SH}")
